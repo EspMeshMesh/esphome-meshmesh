@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace espmeshmesh {
-  class Socket;
+  class MeshSocket;
 }
 
 namespace esphome {
@@ -17,6 +17,7 @@ class MeshmeshTransport : public packet_transport::PacketTransport, public Paren
 public:
   void setup() override;
   void update() override;
+  void dump_config() override;
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
@@ -27,11 +28,14 @@ protected:
   size_t get_max_packet_size() override { return 999; }
 
 private:
+  void openSocket();
   void handleFrame(uint8_t *buf, uint16_t len);
   void recvDatagram(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi);
+  void sentStatus(bool success);
 
 private:
-  espmeshmesh::Socket *socket_{nullptr};
+  espmeshmesh::MeshSocket *mSocket{nullptr};
+  uint32_t mTargetAddress{0};
 };
 
 }  // namespace meshmesh
