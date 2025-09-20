@@ -10,7 +10,7 @@ namespace esphome {
 namespace meshmesh {
 
 class MeshmeshTest : public Component {
-  enum State { STARTUP, TEST1, TEST2 };
+  enum State { BROADCAST1, BROADCAST2, DONE };
 public:
   void setup() override;
   void loop() override;
@@ -20,7 +20,10 @@ public:
 public:
   float get_setup_priority() const override { return setup_priority::LATE; }
 private:
-  void stateStartup();
+  void broadcast1();
+  static const std::string broadcast1title;
+  void broadcast2();
+  static const std::string broadcast2title;
 private:
   uint16_t mIndex{0};
   uint16_t mState{0};

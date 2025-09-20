@@ -64,7 +64,7 @@ void MeshmeshTransport::handleFrame(uint8_t *buf, uint16_t len) {
 }
 
 void MeshmeshTransport::recvDatagram(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
-  ESP_LOGD(TAG, "Received datagram from %06X len %d", from, len);
+  //ESP_LOGD(TAG, "Received datagram from %06X len %d", from, len);
   if(!mSocket->isBradcastTarget() && from != mSocket->getTargetAddress()) {
     ESP_LOGE(TAG, "Received datagram from %06X but expected %06X", from, mSocket->getTargetAddress());
     return;
