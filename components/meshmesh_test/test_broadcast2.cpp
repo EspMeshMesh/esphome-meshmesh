@@ -40,20 +40,21 @@ void MeshmeshTest::broadcast2(){
         break;
         case 2: 
             { // Others:Wait for remote hello
-                uint32_t from = 0;
-                int16_t rssi = 0;
+                uint32_t from{0}; int16_t rssi{0};
                 int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, from, rssi);
                 ERR_CHECK(res) {
-                    if(res > 0) {
-                        STATE_LOG2I("Received small datagram from %06X with rssi %d", from, rssi);
-                        CHANGE_STATE(mState, 4);
-                    } else TIMEOUT_CHECK(5000);
+                    if(res) {
+                        CHANGE_STATE_MSG2("Received small datagram from %06X with rssi %d", mState, 4, from, rssi);
+                    } else {
+                        TIMEOUT_CHECK(5000);
+                    } 
                 } 
             } 
             break;
         case 3: 
             { // Director: Wait reply
-                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
+                uint32_t from{0}; int16_t rssi{0};
+                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, from, rssi);
                 ERR_CHECK(res) {
                     if(res > 0) {
                         std::string reply((const char *)mBuffer, res);
@@ -90,12 +91,14 @@ void MeshmeshTest::broadcast2(){
         break;
         case 6: 
             { // Others: Wait for big packet
-                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
+                uint32_t from{0}; int16_t rssi{0};
+                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, from, rssi);
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        STATE_LOG2I("Received big packet request of size %d", res);
-                        CHANGE_STATE(mState, 8);
-                    } else TIMEOUT_CHECK(1000);
+                        CHANGE_STATE_MSG2("Received big packet request", mState, 8, from, rssi);
+                    } else {
+                        TIMEOUT_CHECK(1000);
+                    }
                 }
             } 
         break;

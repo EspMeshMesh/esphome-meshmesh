@@ -26,7 +26,7 @@ void MeshmeshTest::loop() {
             break;
         case DONE:
             if(millis() - mLastTime > 500) {
-                CHANGE_STATE_MSG("Test 1 timeout", BROADCAST1, 0);
+                CHANGE_STATE_MSG("--------------------------------", BROADCAST1, 0);
             }
             break;
     }
@@ -37,6 +37,13 @@ void MeshmeshTest::dump_config(){
     ESP_LOGCONFIG(TAG, "Index: %d", mIndex);
 }
 
+uint8_t MeshmeshTest::checksum(const uint8_t *buffer, uint16_t size) const {
+    uint8_t sum = 0;
+    for(uint16_t i = 0; i < size; i++) {
+        sum += buffer[i];
+    }
+    return sum;
+}
 
 
 }  // namespace meshmesh

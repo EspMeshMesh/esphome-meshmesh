@@ -7,6 +7,7 @@
 
 #include <meshsocket.h>
 #include <string>
+#include <functional>
 
 namespace esphome {
 namespace meshmesh {
@@ -25,11 +26,13 @@ void MeshmeshTest::broadcast1(){
             {
                 STATE_LOGI(broadcast1title.c_str());
                 mBuffer = new uint8_t[RX_BUFFER_SIZE];
-                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, espmeshmesh::MeshSocket::broadCastAddress);
+                if(mSocket) delete mSocket;
+                mSocket = new espmeshmesh::MeshSocket(TEST_PORT+1, espmeshmesh::MeshSocket::broadCastAddress);
                 int16_t err = mSocket->open(espmeshmesh::MeshSocket::SOCK_DGRAM);
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Socket opened", mState, mIndex == 1 ? 1 : 2);
                 }
+
             }
         break;
         case 1: // Director: Wait 2 seconds and say hello
@@ -46,7 +49,13 @@ void MeshmeshTest::broadcast1(){
                 int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        CHANGE_STATE_MSG("Received small packet", mState, 4);
+                        uint8_t ck1 = checksum(mBuffer, res);
+                        uint8_t ck2 = checksum((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE);
+                        if(ck1 == ck2) {
+                            CHANGE_STATE_MSG("Received correct small packet", mState, 4);
+                        } else {
+                            CHANGE_STATE_MSGE("Received wrong small packet", mState, 99);
+                        }
                     } else TIMEOUT_CHECK(30000);
                 } 
             } 
@@ -56,12 +65,12 @@ void MeshmeshTest::broadcast1(){
                 int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        std::string reply((const char *)mBuffer, res);
-                        if(reply.compare(REPLY_STRING) == 0) {
-                            CHANGE_STATE_MSG("Received hello reply", mState, 5);
+                        uint8_t ck1 = checksum(mBuffer, res);
+                        uint8_t ck2 = checksum((const uint8_t *)REPLY_STRING, REPLY_STRING_SIZE);
+                        if(ck1 == ck2) {
+                            CHANGE_STATE_MSG("Received correct small packet reply", mState, 5);
                         } else {
-                            STATE_LOGE("Received wrong hello reply");
-                            CHANGE_STATE(mState, 5);
+                            CHANGE_STATE_MSGE("Received wrong small packet reply", mState, 99);
                         }
                     } else TIMEOUT_CHECK(1000);
                 } 
@@ -120,14 +129,19 @@ void MeshmeshTest::broadcast1(){
             } 
         break;
         case 99: // Done
-            STATE_LOG2I("%s done", broadcast1title.c_str());
-            delete[] mBuffer;
+            delete mBuffer;
             mBuffer = nullptr;
             delete mSocket;
             mSocket = nullptr;
             CHANGE_STATE(BROADCAST2, 0);
+            STATE_LOG2I("%s done", broadcast1title.c_str());
+            STATE_LOG2I("Free heap: %d after", esp_get_free_heap_size());
             break;
     }
+}
+
+void MeshmeshTest::broadcast1AsyncRecv(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
+    STATE_LOG2I("Received small packet from %06X with rssi %d", from, rssi);
 }
 
 }  // namespace meshmesh

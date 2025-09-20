@@ -21,9 +21,12 @@ public:
   float get_setup_priority() const override { return setup_priority::LATE; }
 private:
   void broadcast1();
+  void broadcast1AsyncRecv(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi);
   static const std::string broadcast1title;
   void broadcast2();
   static const std::string broadcast2title;
+private:
+  uint8_t checksum(const uint8_t *buffer, uint16_t size) const;
 private:
   uint16_t mIndex{0};
   uint16_t mState{0};
