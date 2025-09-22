@@ -27,7 +27,7 @@ void MeshmeshTest::broadcast1(){
                 STATE_LOGI(broadcast1title.c_str());
                 mBuffer = new uint8_t[RX_BUFFER_SIZE];
                 if(mSocket) delete mSocket;
-                mSocket = new espmeshmesh::MeshSocket(TEST_PORT+1, espmeshmesh::MeshSocket::broadCastAddress);
+                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, espmeshmesh::MeshSocket::broadCastAddress);
                 int16_t err = mSocket->open(espmeshmesh::MeshSocket::SOCK_DGRAM);
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Socket opened", mState, mIndex == 1 ? 1 : 2);

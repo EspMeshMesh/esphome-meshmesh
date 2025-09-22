@@ -7,62 +7,70 @@
 
 #include <meshsocket.h>
 #include <string>
+#include <functional>
 
 namespace esphome {
 namespace meshmesh {
 
-const std::string MeshmeshTest::broadcast2title = "Broadcast send/recvDatagram small packet";
+const std::string MeshmeshTest::unicast1title = "Unicast send/recv small packet";
 
-void MeshmeshTest::broadcast2(){
+/**
+ * Testm boradcast function
+ */
+void MeshmeshTest::unicast1(){
     switch(mSubState){
         /**
          * Test 1: Send and receive small packet
          */
         case 0: 
             {
-                STATE_LOGI(broadcast2title.c_str());
+                STATE_LOGI(unicast1title.c_str());
                 mBuffer = new uint8_t[RX_BUFFER_SIZE];
-                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, espmeshmesh::MeshSocket::broadCastAddress);
+                if(mSocket) delete mSocket;
+                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, mFrom);
                 int16_t err = mSocket->open(espmeshmesh::MeshSocket::SOCK_DGRAM);
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Socket opened", mState, mIndex == 1 ? 1 : 2);
                 }
+
             }
         break;
-        case 1: 
-            { // Director: Send small datagram
-                STATE_LOGI("Sending small datagram");
+        case 1: // Director: Wait 2 seconds and say hello
+            if(millis() - mLastTime > 2000) {
+                STATE_LOGI("Sending small packet");
                 int16_t err = mSocket->send((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE);
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Small packet sent", mState, 3);
                 }
-            }
-        break;
+            } 
+            break;
         case 2: 
             { // Others:Wait for remote hello
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
                 ERR_CHECK(res) {
-                    if(res) {
-                        CHANGE_STATE_MSG2("Received small datagram from %06X with rssi %d", mState, 4, mFrom, rssi);
-                    } else {
-                        TIMEOUT_CHECK(5000);
-                    } 
+                    if(res > 0) {
+                        uint8_t ck1 = checksum(mBuffer, res);
+                        uint8_t ck2 = checksum((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE);
+                        if(ck1 == ck2) {
+                            CHANGE_STATE_MSG("Received correct small packet", mState, 4);
+                        } else {
+                            CHANGE_STATE_MSGE("Received wrong small packet", mState, 99);
+                        }
+                    } else TIMEOUT_CHECK(30000);
                 } 
             } 
             break;
         case 3: 
             { // Director: Wait reply
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        std::string reply((const char *)mBuffer, res);
-                        if(reply.compare(REPLY_STRING) == 0) {
-                            CHANGE_STATE_MSG("Received hello reply", mState, 5);
+                        uint8_t ck1 = checksum(mBuffer, res);
+                        uint8_t ck2 = checksum((const uint8_t *)REPLY_STRING, REPLY_STRING_SIZE);
+                        if(ck1 == ck2) {
+                            CHANGE_STATE_MSG("Received correct small packet reply", mState, 5);
                         } else {
-                            STATE_LOGE("Received wrong hello reply");
-                            CHANGE_STATE(mState, 5);
+                            CHANGE_STATE_MSGE("Received wrong small packet reply", mState, 99);
                         }
                     } else TIMEOUT_CHECK(1000);
                 } 
@@ -91,27 +99,23 @@ void MeshmeshTest::broadcast2(){
         break;
         case 6: 
             { // Others: Wait for big packet
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        CHANGE_STATE_MSG2("Received big packet request", mState, 8, mFrom, rssi);
-                    } else {
-                        TIMEOUT_CHECK(1000);
-                    }
+                        STATE_LOG2I("Received big packet request of size %d", res);
+                        CHANGE_STATE(mState, 8);
+                    } else TIMEOUT_CHECK(1000);
                 }
             } 
         break;
         case 7: 
             { // Director: Wait big packet reply
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        CHANGE_STATE_MSG2("Received big packet reply", mState, 99, mFrom, rssi);
-                    } else {
-                        TIMEOUT_CHECK(1000);
-                    }
+                        STATE_LOG2I("Received big packet reply of size %d", res);
+                        CHANGE_STATE(mState, 99);
+                    } else TIMEOUT_CHECK(1000);
                 }
             } 
         break;
@@ -125,15 +129,15 @@ void MeshmeshTest::broadcast2(){
             } 
         break;
         case 99: // Done
-            STATE_LOG2I("%s done", broadcast2title.c_str());
-            delete[] mBuffer;
+            delete mBuffer;
             mBuffer = nullptr;
             delete mSocket;
             mSocket = nullptr;
-            CHANGE_STATE(UNICAST1, 0);
-        break;
+            CHANGE_STATE(DONE, 0);
+            STATE_LOG2I("%s done", unicast1title.c_str());
+            STATE_LOG2I("Free heap: %d after", esp_get_free_heap_size());
+            break;
     }
-   
 }
 
 }  // namespace meshmesh

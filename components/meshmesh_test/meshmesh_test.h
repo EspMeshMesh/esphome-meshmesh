@@ -10,7 +10,7 @@ namespace esphome {
 namespace meshmesh {
 
 class MeshmeshTest : public Component {
-  enum State { BROADCAST1, BROADCAST2, DONE };
+  enum State { BROADCAST1, BROADCAST2, UNICAST1, DONE };
 public:
   void setup() override;
   void loop() override;
@@ -25,6 +25,8 @@ private:
   static const std::string broadcast1title;
   void broadcast2();
   static const std::string broadcast2title;
+  void unicast1();
+  static const std::string unicast1title;
 private:
   uint8_t checksum(const uint8_t *buffer, uint16_t size) const;
 private:
@@ -34,6 +36,7 @@ private:
   uint32_t mLastTime{0};
   espmeshmesh::MeshSocket *mSocket{nullptr};
   uint8_t *mBuffer{0};
+  uint32_t mFrom{0};
 };
 
 
