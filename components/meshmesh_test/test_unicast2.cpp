@@ -12,27 +12,26 @@
 namespace esphome {
 namespace meshmesh {
 
-const std::string MeshmeshTest::broadcast1title = "Broadcast send/recv small packet";
+const std::string MeshmeshTest::unicast2title = "Unicast send and recv async";
 
 /**
  * Testm boradcast function
  */
-void MeshmeshTest::broadcast1(){
+void MeshmeshTest::unicast2() {
     switch(mSubState){
         /**
          * Test 1: Send and receive small packet
          */
         case 0: 
             {
-                STATE_LOGI(broadcast1title.c_str());
+                STATE_LOGI(unicast1title.c_str());
                 mBuffer = new uint8_t[RX_BUFFER_SIZE];
                 if(mSocket) delete mSocket;
-                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, espmeshmesh::MeshSocket::broadCastAddress);
+                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, mFrom);
                 int16_t err = mSocket->open(espmeshmesh::MeshSocket::SOCK_DGRAM);
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Socket opened", mState, mIndex == 1 ? 1 : 2);
                 }
-
             }
         break;
         case 1: // Director: Wait 2 seconds and say hello
@@ -137,20 +136,17 @@ void MeshmeshTest::broadcast1(){
             CHANGE_STATE(DONE, 0);
             STATE_LOGE2("End with error", "Big packet reply sent");
         break;        
-        case 99: // Done
+        case 99:
+            // End with success
             delete mBuffer;
             mBuffer = nullptr;
             delete mSocket;
             mSocket = nullptr;
-            CHANGE_STATE(BROADCAST2, 0);
-            STATE_LOG2I("%s done", broadcast1title.c_str());
+            CHANGE_STATE(DONE, 0);
+            STATE_LOG2I("%s done", unicast1title.c_str());
             STATE_LOG2I("Free heap: %d after", esp_get_free_heap_size());
             break;
     }
-}
-
-void MeshmeshTest::broadcast1AsyncRecv(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
-    STATE_LOG2I("Received small packet from %06X with rssi %d", from, rssi);
 }
 
 }  // namespace meshmesh

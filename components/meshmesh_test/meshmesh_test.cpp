@@ -27,6 +27,9 @@ void MeshmeshTest::loop() {
         case UNICAST1:
             unicast1();
             break;
+        case UNICAST2:
+            unicast2();
+            break;
         case DONE:
             if(millis() - mLastTime > 500) {
                 CHANGE_STATE_MSG("--------------------------------", BROADCAST1, 0);

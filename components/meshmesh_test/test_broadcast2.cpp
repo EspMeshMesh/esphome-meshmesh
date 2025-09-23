@@ -124,7 +124,17 @@ void MeshmeshTest::broadcast2(){
                 }
             } 
         break;
-        case 99: // Done
+        case 98:
+            // End with error
+            delete mBuffer;
+            mBuffer = nullptr;
+            delete mSocket;
+            mSocket = nullptr;
+            CHANGE_STATE(DONE, 0);
+            STATE_LOGE2("End with error", "Big packet reply sent");
+        break;        
+        case 99:
+            // End with success
             STATE_LOG2I("%s done", broadcast2title.c_str());
             delete[] mBuffer;
             mBuffer = nullptr;

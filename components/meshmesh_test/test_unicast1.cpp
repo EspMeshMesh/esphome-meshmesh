@@ -128,12 +128,22 @@ void MeshmeshTest::unicast1(){
                 }
             } 
         break;
-        case 99: // Done
+        case 98:
+            // End with error
             delete mBuffer;
             mBuffer = nullptr;
             delete mSocket;
             mSocket = nullptr;
             CHANGE_STATE(DONE, 0);
+            STATE_LOGE2("End with error", "Big packet reply sent");
+        break;        
+        case 99:
+            // End with success
+            delete mBuffer;
+            mBuffer = nullptr;
+            delete mSocket;
+            mSocket = nullptr;
+            CHANGE_STATE(UNICAST2, 0);
             STATE_LOG2I("%s done", unicast1title.c_str());
             STATE_LOG2I("Free heap: %d after", esp_get_free_heap_size());
             break;
