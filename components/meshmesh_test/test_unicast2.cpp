@@ -29,6 +29,7 @@ void MeshmeshTest::unicast2() {
                 if(mSocket) delete mSocket;
                 mSocket = new espmeshmesh::MeshSocket(TEST_PORT, mFrom);
                 int16_t err = mSocket->open(espmeshmesh::MeshSocket::SOCK_DGRAM);
+                mSocket->recvDatagramCb(std::bind(&MeshmeshTest::unicast2AsyncRecv, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Socket opened", mState, mIndex == 1 ? 1 : 2);
                 }
@@ -42,38 +43,6 @@ void MeshmeshTest::unicast2() {
                     CHANGE_STATE_MSG("Small packet sent", mState, 3);
                 }
             } 
-            break;
-        case 2: 
-            { // Others:Wait for remote hello
-                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
-                ERR_CHECK(res) {
-                    if(res > 0) {
-                        uint8_t ck1 = checksum(mBuffer, res);
-                        uint8_t ck2 = checksum((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE);
-                        if(ck1 == ck2) {
-                            CHANGE_STATE_MSG("Received correct small packet", mState, 4);
-                        } else {
-                            CHANGE_STATE_MSGE("Received wrong small packet", mState, 99);
-                        }
-                    } else TIMEOUT_CHECK(30000);
-                } 
-            } 
-            break;
-        case 3: 
-            { // Director: Wait reply
-                int16_t res = mSocket->recv(mBuffer, RX_BUFFER_SIZE);
-                ERR_CHECK(res) {
-                    if(res > 0) {
-                        uint8_t ck1 = checksum(mBuffer, res);
-                        uint8_t ck2 = checksum((const uint8_t *)REPLY_STRING, REPLY_STRING_SIZE);
-                        if(ck1 == ck2) {
-                            CHANGE_STATE_MSG("Received correct small packet reply", mState, 5);
-                        } else {
-                            CHANGE_STATE_MSGE("Received wrong small packet reply", mState, 99);
-                        }
-                    } else TIMEOUT_CHECK(1000);
-                } 
-            }
             break;
         case 4: 
             { // Others: Send reply
@@ -146,6 +115,34 @@ void MeshmeshTest::unicast2() {
             STATE_LOG2I("%s done", unicast1title.c_str());
             STATE_LOG2I("Free heap: %d after", esp_get_free_heap_size());
             break;
+    }
+}
+
+void MeshmeshTest::unicast2AsyncRecv(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
+    STATE_LOG2I("Received %d bytes from %06X rssi %d", len, from, rssi);
+    switch(mSubState){
+        case 2:
+            { // Others:Wait for remote hello
+                uint8_t ck1 = checksum(mBuffer, len);
+                uint8_t ck2 = checksum((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE);
+                if(ck1 == ck2) {
+                    CHANGE_STATE_MSG("Received correct small packet", mState, 4);
+                } else {
+                    CHANGE_STATE_MSGE("Received wrong small packet", mState, 98);
+                }
+            } 
+        break;
+        case 3: 
+            { // Director: Wait reply
+                uint8_t ck1 = checksum(mBuffer, len);
+                uint8_t ck2 = checksum((const uint8_t *)REPLY_STRING, REPLY_STRING_SIZE);
+                if(ck1 == ck2) {
+                    CHANGE_STATE_MSG("Received correct small packet reply", mState, 5);
+                } else {
+                    CHANGE_STATE_MSGE("Received wrong small packet reply", mState, 98);
+                }
+            }
+        break;
     }
 }
 

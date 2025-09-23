@@ -29,6 +29,7 @@ private:
   static const std::string unicast1title;
   void unicast2();
   static const std::string unicast2title;
+  void unicast2AsyncRecv(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi);
 private:
   uint8_t checksum(const uint8_t *buffer, uint16_t size) const;
 private:
