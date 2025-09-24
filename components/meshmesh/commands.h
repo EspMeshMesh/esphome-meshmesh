@@ -26,3 +26,6 @@
 // Allocated for Packet Transport
 #define CMD_PACKET_TRANSPORT_REQ 0x32
 #define CMD_PACKET_TRANSPORT_REP 0x33
+#define CMD_LOGEVENT_REQ 0x38
+#define CMD_LOGEVENT_REP 0x39
+

@@ -60,8 +60,12 @@ public:
   void loop() override;
 private:
   int8_t handleFrame(uint8_t *buf, uint16_t len, uint32_t from);
+#ifdef USE_LOGGER
+  void sendLog(int level, const char *tag, const char *payload);
+#endif
   espmeshmesh::EspMeshMesh *mesh;
 private:
+  bool mLogToUart{false};
   bool mRebootRequested{false};
   uint32_t mRebootRequestedTime{0};
 };

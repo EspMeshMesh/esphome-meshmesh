@@ -9,6 +9,9 @@
 #include "esphome/core/preferences.h"
 #include "esphome/core/application.h"
 #include "esphome/core/version.h"
+#ifdef USE_LOGGER
+#include "esphome/components/logger/logger.h"
+#endif
 
 #define MAX_CHANNEL 13
 
@@ -31,6 +34,7 @@ namespace meshmesh {
 
 MeshmeshComponent::MeshmeshComponent(int baud_rate, int tx_buffer, int rx_buffer) {
   global_meshmesh_component = this;
+  mLogToUart = baud_rate > 0;
   mesh = new espmeshmesh::EspMeshMesh(baud_rate, tx_buffer, rx_buffer);
   mesh->setLogCb(logPrintfCb);
 }
@@ -76,6 +80,14 @@ void MeshmeshComponent::setup() {
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
   };
+
+#ifdef USE_LOGGER
+  if (logger::global_logger != nullptr) {
+    logger::global_logger->add_on_log_callback(std::bind(&MeshmeshComponent::sendLog, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+  }
+#endif
+
+
   mesh->setup(&config);
   mesh->addHandleFrameCb(std::bind(&MeshmeshComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 }
@@ -208,6 +220,42 @@ int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from)
   }
   return FRAME_NOT_HANDLED;
 }
+
+void MeshmeshComponent::sendLog(int level, const char *tag, const char *payload) {
+  if (!mLogToUart && mPreferences.log_destination == 0)
+    return;
+
+  // uint16_t taglen = os_strlen(tag);
+  uint16_t payloadlen = strlen(payload);
+  // uint16_t buffersize = 7+taglen+1+payloadlen;
+  uint16_t buffersize = 7 + payloadlen;
+
+  auto buffer = new uint8_t[buffersize];
+  auto buffer_ptr = buffer;
+
+  *buffer_ptr = CMD_LOGEVENT_REP;
+  buffer_ptr++;
+  espmeshmesh::uint16toBuffer(buffer_ptr, (uint16_t) level);
+  buffer_ptr += 2;
+  espmeshmesh::uint32toBuffer(buffer_ptr, 0);
+  buffer_ptr += 4;
+
+  if (payloadlen > 0)
+    memcpy(buffer_ptr, payload, payloadlen);
+  if (mLogToUart)
+    mesh->uartSendData(buffer, buffersize);
+  if (mPreferences.log_destination == 1) {
+  /*  if (mesh->broadcast)
+      mesh->broadcast->send(buffer, buffersize);
+  } else if (mPreferences.log_destination > 1) {
+    if (mesh->unicast)
+      mesh->unicast->send(buffer, buffersize, mPreferences.log_destination, UNICAST_DEFAULT_PORT);*/
+  }
+
+  delete[] buffer;
+}
+ 
+
 
 void logPrintfCb(int level, const char *tag, int line, const char *format, va_list args) {
   esp_log_vprintf_(level, tag, line, format, args);
