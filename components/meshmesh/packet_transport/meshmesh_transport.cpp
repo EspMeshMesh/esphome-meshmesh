@@ -4,16 +4,21 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 #include "esphome/components/network/util.h"
+
+#include <functional>
+
 #include <espmeshmesh.h>
+#include <meshsocket.h>
 
 namespace esphome {
 namespace meshmesh {
 
 static const char *const TAG = "meshmesh_transport";
+static const uint8_t PACKET_TRANSPORT_PORT = 0xA2;
 
 void MeshmeshTransport::setup() {
   PacketTransport::setup();
-  this->parent_->getNetwork()->addHandleFrameCb(std::bind(&MeshmeshTransport::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+  if(!mSocket) openSocket();
 }
 
 void MeshmeshTransport::update() {
@@ -22,25 +27,57 @@ void MeshmeshTransport::update() {
   PacketTransport::update();
 }
 
-void MeshmeshTransport::send_packet(const std::vector<uint8_t> &buf) const {
-  uint8_t *buff = new uint8_t[buf.size()+1];
-  buff[0] = CMD_PACKET_TRANSPORT_REQ;
-  memcpy(buff+1, buf.data(), buf.size());
-  if(this->address_ != 0)
-    this->parent_->getNetwork()->uniCastSendData(buff.data(), buff.size(), this->address_);
-  else
-    this->parent_->getNetwork()->broadCastSendData(buff.data(), buff.size());
-  delete[] buff;
+void MeshmeshTransport::dump_config() {
+  ESP_LOGCONFIG(TAG, "MeshmeshTransport");
+  ESP_LOGCONFIG(TAG, "Address: 0x%06X", mTargetAddress);
 }
 
-int8_t MeshmeshTransport::handleFrame(uint8_t *buf, uint16_t len, uint32_t from) {
-  if(len < 1 || buf[0] != CMD_PACKET_TRANSPORT_REQ) {
-    return FRAME_NOT_HANDLED;
+void MeshmeshTransport::set_address(uint32_t address) {
+  mTargetAddress = address;
+  if(mSocket != nullptr) {
+    delete mSocket;
+    openSocket();
   }
+}
 
-  ESP_LOGD(TAG, "Received packet from %d, len %d", from, len);
-  this->process_(std::vector<uint8_t>(buf+1, buf+len-2));
-  return HANDLE_UART_OK;
+void MeshmeshTransport::send_packet(const std::vector<uint8_t> &buf) const {
+  if(!mSocket) return;
+  int8_t err = mSocket->send(buf.data(), buf.size());
+  if(err != 0) {
+    ESP_LOGE(TAG, "Error sending packet to %06X: err:%d", mSocket->getTargetAddress(), err);
+  }
+}
+
+void MeshmeshTransport::openSocket() {
+  mSocket = new espmeshmesh::MeshSocket(PACKET_TRANSPORT_PORT, mTargetAddress);
+  mSocket->recvDatagramCb(std::bind(&MeshmeshTransport::recvDatagram, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+  mSocket->sentStatusCb(std::bind(&MeshmeshTransport::sentStatus, this, std::placeholders::_1));
+  int8_t err = mSocket->open();
+  if(err < 0) {
+    ESP_LOGE(TAG, "Error opening socket: %d", err);
+  }
+}
+
+void MeshmeshTransport::handleFrame(uint8_t *buf, uint16_t len) {
+  ESP_LOGD(TAG, "Received packet len %d", len);
+  this->process_(std::vector<uint8_t>(buf, buf+len-1));
+}
+
+void MeshmeshTransport::recvDatagram(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
+  //ESP_LOGD(TAG, "Received datagram from %06X len %d", from, len);
+  if(!mSocket->isBradcastTarget() && from != mSocket->getTargetAddress()) {
+    ESP_LOGE(TAG, "Received datagram from %06X but expected %06X", from, mSocket->getTargetAddress());
+    return;
+  }
+  this->process_(std::vector<uint8_t>(buf, buf+len-1));
+}
+
+void MeshmeshTransport::sentStatus(bool success) {
+  if(!success) {
+    ESP_LOGE(TAG, "Last packet sent status: error");
+  } else {
+    ESP_LOGD(TAG, "Last packer sent status: success");
+  }
 }
 
 

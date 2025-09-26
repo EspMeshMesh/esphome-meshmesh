@@ -7,6 +7,8 @@
 #include "esphome/core/base_automation.h"
 #include "esphome/core/log.h"
 
+#include <cstdint>
+
 namespace esphome {
 namespace meshmesh {
 
@@ -26,7 +28,7 @@ template<typename... Ts> class SendAction : public Action<Ts...>, public Parente
 
 }; // class SendAction
 
-class OnReceiveTrigger : public Trigger<uint32 , const uint8_t *, uint8_t>, public MeshMeshDirectReceivedPacketHandler {
+class OnReceiveTrigger : public Trigger<uint32_t , const uint8_t *, uint8_t>, public MeshMeshDirectReceivedPacketHandler {
 public:
   explicit OnReceiveTrigger() {}
 
