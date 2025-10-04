@@ -255,8 +255,6 @@ void MeshmeshComponent::sendLog(int level, const char *tag, const char *payload)
   delete[] buffer;
 }
  
-
-
 void logPrintfCb(int level, const char *tag, int line, const char *format, va_list args) {
   esp_log_vprintf_(level, tag, line, format, args);
 }
