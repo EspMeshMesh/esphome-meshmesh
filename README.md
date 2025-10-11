@@ -85,10 +85,15 @@ The MeshMesh component provide a packet transport platform implementation.
 packet_transport:
   platform: meshmesh
   update_interval: 5s
-  address: 0x000000
+  address: 0x112233
+  repeaters:
+    - 0x123456
+    - 0x563412
+
 ```
 
-* **address** (Required, int): The address for the remote node counterpart.
+* **address** (Required, int): The address for the remote node counterpart. Use 0 or UINT32_MAX to broadcast 
+* **repeaters** (Optional, list of int) The sequence of repeaters to use to reach the address.
 
 ## Meshmesh Direct
 
