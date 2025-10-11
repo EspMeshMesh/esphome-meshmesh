@@ -101,7 +101,7 @@ void PingComponent::recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::
             mLatencySensor->publish_state(now - mLastPingTime);
         }
 #endif
-        ESP_LOGV(TAG, "Received a PONG packet from %06X after %d ms", from, now - mLastPingTime);
+        ESP_LOGV(TAG, "Received a PONG packet from %06X after %d ms", from.address, now - mLastPingTime);
         mLastPingTime = 0;
         return;
     }    
