@@ -16,10 +16,11 @@ static const uint8_t MESHMESH_PING_PORT = 0xA4;
 
 
 PingComponent::PingComponent() {
-    ESP_LOGI(TAG, "PingSensor constructor");
+    mTargetAddress.port = MESHMESH_PING_PORT;
 }
 
 void PingComponent::setup() {
+    ESP_LOGI(TAG, "PingComponent setup to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
     if(!mSocket) openSocket();
 }
 
@@ -52,7 +53,7 @@ void PingComponent::loop() {
 
 void PingComponent::update() {
     if(mTargetAddress.address <= 1) return;
-    ESP_LOGV(TAG, "PingComponent update send TO %06X", mTargetAddress.address);
+    ESP_LOGV(TAG, "PingComponent update send to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
     uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PING), 'P', 'I', 'N', 'G' };
     mLastPingTime = millis();
     if(mSocket) mSocket->sendDatagram(pkt, 5, mTargetAddress, nullptr);
@@ -60,6 +61,7 @@ void PingComponent::update() {
 
 void PingComponent::openSocket() {
     if(mTargetAddress.address == 0) return;
+    ESP_LOGI(TAG, "PingComponent openSocket to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
     mSocket = new espmeshmesh::MeshSocket(MESHMESH_PING_PORT);
     mSocket->recvDatagramCb(std::bind(&PingComponent::recvDatagram, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
     int8_t err = mSocket->open();
@@ -70,7 +72,7 @@ void PingComponent::openSocket() {
 
 void PingComponent::set_target_address(uint32_t target_address) {
     mTargetAddress.address = target_address;
-    ESP_LOGI(TAG, "PingComponent set_target_address: 0x%06X", mTargetAddress);
+    ESP_LOGI(TAG, "PingComponent set_target_address: 0x%06X", mTargetAddress.address);
 }
 
 void PingComponent::set_repeaters(const std::vector<uint32_t> &value) {
@@ -82,8 +84,10 @@ void PingComponent::recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::
     uint32_t now = millis();
     if(buf[0] == static_cast<uint8_t>(PingPacket::PING) && strncmp(reinterpret_cast<char *>(buf), "PING", 4) != 0) {
         uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PONG), 'P', 'O', 'N', 'G' };
-        if(mSocket) mSocket->sendDatagram(pkt, 5, from, nullptr);
-        ESP_LOGV(TAG, "Received a PING packet from %06X", from);
+        espmeshmesh::MeshAddress to = from;
+        to.port = MESHMESH_PING_PORT;
+        if(mSocket) mSocket->sendDatagram(pkt, 5, to, nullptr);
+        ESP_LOGV(TAG, "Received a PING packet from %06X on port %d", from.address, from.port);
         return;
     }   
     if(buf[0] == static_cast<uint8_t>(PingPacket::PONG) && strncmp(reinterpret_cast<char *>(buf), "PONG", 4) != 0) {
