@@ -143,6 +143,7 @@ Example config on the pinger device
 
 ```yaml
 ping:
+  update_interval: 60s
   address: 0xC0E5A8
   repeaters:
     - 0x123456
@@ -167,5 +168,6 @@ ping:
 
 Configuration variables:
 
+* **update_interval**  (Optional, Time): The interval between pings. Defaults to 30s.
 * **address** (Optional, int): The address for the remote node to ping. None if is a passive only node.
 * **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.
