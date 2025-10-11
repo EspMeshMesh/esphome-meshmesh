@@ -2,11 +2,11 @@
 
 #include <esphome/core/log.h>
 
-#include <espmeshmesh.h>
-#include <meshsocket.h>
-
 #include <functional>
 #include <string.h>
+
+#include <espmeshmesh.h>
+#include <meshsocket.h>
 
 namespace esphome {
 namespace meshmesh {
@@ -25,7 +25,8 @@ void PingComponent::setup() {
 
 void PingComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "PingComponent");
-    ESP_LOGCONFIG(TAG, "Target Address: %06X", mTargetAddress);
+    ESP_LOGCONFIG(TAG, "Target Address: %06X", mTargetAddress.address);
+    ESP_LOGCONFIG(TAG, "Repeaters: %d", mTargetAddress.repeaters.size());
     ESP_LOGCONFIG(TAG, "Log level: %d", ESPHOME_LOG_LEVEL);
 #ifdef USE_BINARY_SENSOR
     ESP_LOGCONFIG(TAG, "Binary sensor: %s", mPresenceSensor!=nullptr ? "true" : "false");
@@ -50,16 +51,16 @@ void PingComponent::loop() {
 }
 
 void PingComponent::update() {
-    if(mTargetAddress <= 1) return;
-    ESP_LOGV(TAG, "PingComponent update send TO %06X", mTargetAddress);
+    if(mTargetAddress.address <= 1) return;
+    ESP_LOGV(TAG, "PingComponent update send TO %06X", mTargetAddress.address);
     uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PING), 'P', 'I', 'N', 'G' };
     mLastPingTime = millis();
-    if(mSocket) mSocket->sendDatagram(pkt, 5, mTargetAddress, MESHMESH_PING_PORT, nullptr, nullptr);
+    if(mSocket) mSocket->sendDatagram(pkt, 5, mTargetAddress, nullptr);
 }
 
 void PingComponent::openSocket() {
-    if(mTargetAddress == 0) return;
-    mSocket = new espmeshmesh::MeshSocket(MESHMESH_PING_PORT, mTargetAddress);
+    if(mTargetAddress.address == 0) return;
+    mSocket = new espmeshmesh::MeshSocket(MESHMESH_PING_PORT);
     mSocket->recvDatagramCb(std::bind(&PingComponent::recvDatagram, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
     int8_t err = mSocket->open();
     if(err < 0) {
@@ -68,15 +69,20 @@ void PingComponent::openSocket() {
 }
 
 void PingComponent::set_target_address(uint32_t target_address) {
-    mTargetAddress = target_address;
+    mTargetAddress.address = target_address;
     ESP_LOGI(TAG, "PingComponent set_target_address: 0x%06X", mTargetAddress);
 }
 
-void PingComponent::recvDatagram(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
+void PingComponent::set_repeaters(const std::vector<uint32_t> &value) {
+    mTargetAddress.repeaters = value;
+    ESP_LOGI(TAG, "PingComponent set_repeaters: %d", mTargetAddress.repeaters.size());
+}
+
+void PingComponent::recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi) {
     uint32_t now = millis();
     if(buf[0] == static_cast<uint8_t>(PingPacket::PING) && strncmp(reinterpret_cast<char *>(buf), "PING", 4) != 0) {
         uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PONG), 'P', 'O', 'N', 'G' };
-        if(mSocket) mSocket->sendDatagram(pkt, 5, from, MESHMESH_PING_PORT, nullptr, nullptr);
+        if(mSocket) mSocket->sendDatagram(pkt, 5, from, nullptr);
         ESP_LOGV(TAG, "Received a PING packet from %06X", from);
         return;
     }   

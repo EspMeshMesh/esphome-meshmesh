@@ -128,3 +128,39 @@ Configuration variables:
 * **target** (Required, int): The hash value of the physical switch on the remote node.
 * **id** (Optional, string): Manually specify the ID for code generation. At least one of id and name must be specified.
 * **name** (Optional, string): The name of the switch. At least one of id and name must be specified.
+
+
+## Ping component
+
+The ping component check periodically the connection with another node of the network it provide a presence sensor (binary_sensor) and a latency sensor to trigger actions when the network connectivity change.
+
+Example config on the pinger device
+
+```yaml
+ping:
+  address: 0xC0E5A8
+  repeaters:
+    - 0x123456
+    - 0x563412
+
+binary_sensor:
+  - platform: ping
+    presence:
+      id: presence
+
+sensor:
+  - platform: ping
+    latency:
+      id: latency
+```
+
+Example config on the pinged device
+
+```yaml
+ping:
+```
+
+Configuration variables:
+
+* **address** (Optional, int): The address for the remote node to ping. None if is a passive only node.
+* **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.

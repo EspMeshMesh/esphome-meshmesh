@@ -11,6 +11,8 @@
 
 #include "esphome/core/component.h"
 
+#include <meshaddress.h>
+
 namespace espmeshmesh {
   class MeshSocket;
 }
@@ -29,6 +31,7 @@ public:
   virtual void update() override;
 
   void set_target_address(uint32_t target_address);
+  void set_repeaters(const std::vector<uint32_t> &value);
 #ifdef USE_BINARY_SENSOR
   void set_presence_sensor(binary_sensor::BinarySensor *presence_sensor) { mPresenceSensor = presence_sensor; }
 #endif
@@ -38,7 +41,7 @@ public:
   float get_setup_priority() const override { return esphome::setup_priority::AFTER_WIFI; }
 private:
   void openSocket();
-  void recvDatagram(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi);
+  void recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi);
 private:
   espmeshmesh::MeshSocket *mSocket{nullptr};
 #ifdef USE_BINARY_SENSOR
@@ -48,7 +51,7 @@ private:
   sensor::Sensor *mLatencySensor{nullptr};
 #endif
 protected:
-  uint32_t mTargetAddress = 0;
+  espmeshmesh::MeshAddress mTargetAddress;
   uint32_t mLastPingTime = 0;
 };
 
