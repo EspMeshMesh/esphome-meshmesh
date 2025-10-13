@@ -112,7 +112,7 @@ void MeshmeshComponent::loop() {
   }
 }
 
-int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from) {
+int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
   //ESP_LOGD(TAG, "handleFrame: %d, len: %d, from: %d", buf[0], len, from);
   switch (buf[0]) {
     case CMD_NODE_TAG_REQ:
@@ -129,8 +129,8 @@ int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from)
         memcpy(mPreferences.devicetag, buf + 1, len - 1);
         mPreferences.devicetag[len - 1] = 0;
         mPreferencesObject.save(&mPreferences);
-        buf[0] = CMD_NODE_TAG_SET_REP;
-        mesh->commandReply(buf, 1);
+        uint8_t rep[1] = {CMD_NODE_TAG_SET_REP};
+        mesh->commandReply(rep, 1);
         return HANDLE_UART_OK;
       }
       break;
@@ -140,8 +140,8 @@ int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from)
         if (channel < MAX_CHANNEL) {
           mPreferences.channel = channel;
           mPreferencesObject.save(&mPreferences);
-          buf[0] = CMD_CHANNEL_SET_REP;
-          mesh->commandReply(buf, 1);
+          uint8_t rep[1] = {CMD_CHANNEL_SET_REP};
+          mesh->commandReply(rep, 1);
           return HANDLE_UART_OK;
         }
       }
@@ -168,8 +168,8 @@ int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from)
       if (len == 5) {
         mPreferences.log_destination = espmeshmesh::uint32FromBuffer(buf + 1);
         mPreferencesObject.save(&mPreferences);
-        buf[0] = CMD_LOG_DEST_SET_REP;
-        mesh->commandReply(buf, 1);
+        uint8_t rep[1] = {CMD_LOG_DEST_SET_REP};
+        mesh->commandReply(rep, 1);
         return HANDLE_UART_OK;
       }
       break;
@@ -186,8 +186,8 @@ int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from)
       if (len == 5) {
         mPreferences.groups = espmeshmesh::uint32FromBuffer(buf + 1);
         mPreferencesObject.save(&mPreferences);
-        buf[0] = CMD_GROUPS_SET_REP;
-        mesh->commandReply(buf, 1);
+        uint8_t rep[1] = {CMD_GROUPS_SET_REP};
+        mesh->commandReply(rep, 1);
         return HANDLE_UART_OK;
       }
       break;
@@ -207,10 +207,10 @@ int8_t MeshmeshComponent::handleFrame(uint8_t *buf, uint16_t len, uint32_t from)
       break;
     case CMD_REBOOT_REQ:
       if (len == 1) {
-        buf[0] = CMD_REBOOT_REP;
         mRebootRequested = true;
         mRebootRequestedTime = millis();
-        mesh->commandReply(buf, 1);
+        uint8_t rep[1] = {CMD_REBOOT_REP};
+        mesh->commandReply(rep, 1);
         return HANDLE_UART_OK;
       }
       break;
