@@ -20,9 +20,9 @@ CONFIG_SCHEMA = cv.Schema(
 ).extend(cv.COMPONENT_SCHEMA).extend(cv.polling_component_schema("60s"))
 
 
-async def to_code(config):
+def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
-    await cg.register_component(var, config)
+    cg.register_component(var, config)
     cg.add(var.set_target_address(config[CONF_ADDRESS]))
     if CONF_REPEATERS in config:    
         cg.add(var.set_repeaters(config[CONF_REPEATERS]))
