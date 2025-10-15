@@ -85,10 +85,15 @@ The MeshMesh component provide a packet transport platform implementation.
 packet_transport:
   platform: meshmesh
   update_interval: 5s
-  address: 0x000000
+  address: 0x112233
+  repeaters:
+    - 0x123456
+    - 0x563412
+
 ```
 
-* **address** (Required, int): The address for the remote node counterpart.
+* **address** (Required, int): The address for the remote node counterpart. Use 0 or UINT32_MAX to broadcast 
+* **repeaters** (Optional, list of int) The sequence of repeaters to use to reach the address.
 
 ## Meshmesh Direct
 
@@ -128,3 +133,41 @@ Configuration variables:
 * **target** (Required, int): The hash value of the physical switch on the remote node.
 * **id** (Optional, string): Manually specify the ID for code generation. At least one of id and name must be specified.
 * **name** (Optional, string): The name of the switch. At least one of id and name must be specified.
+
+
+## Ping component
+
+The ping component check periodically the connection with another node of the network it provide a presence sensor (binary_sensor) and a latency sensor to trigger actions when the network connectivity change.
+
+Example config on the pinger device
+
+```yaml
+ping:
+  update_interval: 60s
+  address: 0xC0E5A8
+  repeaters:
+    - 0x123456
+    - 0x563412
+
+binary_sensor:
+  - platform: ping
+    presence:
+      id: presence
+
+sensor:
+  - platform: ping
+    latency:
+      id: latency
+```
+
+Example config on the pinged device
+
+```yaml
+ping:
+```
+
+Configuration variables:
+
+* **update_interval**  (Optional, Time): The interval between pings. Defaults to 30s.
+* **address** (Optional, int): The address for the remote node to ping. None if is a passive only node.
+* **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.

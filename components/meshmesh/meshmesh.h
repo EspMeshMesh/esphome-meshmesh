@@ -59,7 +59,7 @@ public:
   float get_setup_priority() const override { return setup_priority::BEFORE_CONNECTION; }
   void loop() override;
 private:
-  int8_t handleFrame(uint8_t *buf, uint16_t len, uint32_t from);
+  int8_t handleFrame(const uint8_t *buf, uint16_t len, uint32_t from);
 #ifdef USE_LOGGER
   void sendLog(int level, const char *tag, const char *payload);
 #endif

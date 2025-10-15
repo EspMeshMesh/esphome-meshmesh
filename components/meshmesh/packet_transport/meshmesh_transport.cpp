@@ -33,7 +33,16 @@ void MeshmeshTransport::dump_config() {
 }
 
 void MeshmeshTransport::set_address(uint32_t address) {
-  mTargetAddress = address;
+  mTargetAddress.port = PACKET_TRANSPORT_PORT;
+  mTargetAddress.address = address == 0 ? espmeshmesh::MeshAddress::broadCastAddress : address;
+  if(mSocket != nullptr) {
+    delete mSocket;
+    openSocket();
+  }
+}
+
+void MeshmeshTransport::set_repeaters(const std::vector<uint32_t> &repeaters) {
+  mTargetAddress.repeaters = repeaters;
   if(mSocket != nullptr) {
     delete mSocket;
     openSocket();
@@ -42,14 +51,14 @@ void MeshmeshTransport::set_address(uint32_t address) {
 
 void MeshmeshTransport::send_packet(const std::vector<uint8_t> &buf) const {
   if(!mSocket) return;
-  int8_t err = mSocket->send(buf.data(), buf.size());
+  int8_t err = mSocket->sendDatagram(buf.data(), buf.size(), mTargetAddress, nullptr);
   if(err != 0) {
     ESP_LOGE(TAG, "Error sending packet to %06X: err:%d", mSocket->getTargetAddress(), err);
   }
 }
 
 void MeshmeshTransport::openSocket() {
-  mSocket = new espmeshmesh::MeshSocket(PACKET_TRANSPORT_PORT, mTargetAddress);
+  mSocket = new espmeshmesh::MeshSocket(PACKET_TRANSPORT_PORT);
   mSocket->recvDatagramCb(std::bind(&MeshmeshTransport::recvDatagram, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
   mSocket->sentStatusCb(std::bind(&MeshmeshTransport::sentStatus, this, std::placeholders::_1));
   int8_t err = mSocket->open();
@@ -63,10 +72,10 @@ void MeshmeshTransport::handleFrame(uint8_t *buf, uint16_t len) {
   this->process_(std::vector<uint8_t>(buf, buf+len-1));
 }
 
-void MeshmeshTransport::recvDatagram(uint8_t *buf, uint16_t len, uint32_t from, int16_t rssi) {
+void MeshmeshTransport::recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi) {
   //ESP_LOGD(TAG, "Received datagram from %06X len %d", from, len);
-  if(!mSocket->isBradcastTarget() && from != mSocket->getTargetAddress()) {
-    ESP_LOGE(TAG, "Received datagram from %06X but expected %06X", from, mSocket->getTargetAddress());
+  if(!mTargetAddress.isBroadcast() && from.address != mTargetAddress.address) {
+    ESP_LOGE(TAG, "Received datagram from %06X but expected %06X", from.address, mTargetAddress.address);
     return;
   }
   this->process_(std::vector<uint8_t>(buf, buf+len-1));

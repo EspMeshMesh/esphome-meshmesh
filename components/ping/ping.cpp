@@ -1,0 +1,112 @@
+#include "ping.h"
+
+#include <esphome/core/log.h>
+
+#include <functional>
+#include <string.h>
+
+#include <espmeshmesh.h>
+#include <meshsocket.h>
+
+namespace esphome {
+namespace meshmesh {
+
+static const char *TAG = "ping";
+static const uint8_t MESHMESH_PING_PORT = 0xA4;
+
+
+PingComponent::PingComponent() {
+    mTargetAddress.port = MESHMESH_PING_PORT;
+}
+
+void PingComponent::setup() {
+    ESP_LOGI(TAG, "PingComponent setup to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
+    if(!mSocket) openSocket();
+}
+
+void PingComponent::dump_config() {
+    ESP_LOGCONFIG(TAG, "PingComponent");
+    ESP_LOGCONFIG(TAG, "Target Address: %06X", mTargetAddress.address);
+    ESP_LOGCONFIG(TAG, "Repeaters: %d", mTargetAddress.repeaters.size());
+    ESP_LOGCONFIG(TAG, "Log level: %d", ESPHOME_LOG_LEVEL);
+#ifdef USE_BINARY_SENSOR
+    ESP_LOGCONFIG(TAG, "Binary sensor: %s", mPresenceSensor!=nullptr ? "true" : "false");
+#endif
+#ifdef USE_SENSOR
+    ESP_LOGCONFIG(TAG, "Sensor: %s", mLatencySensor!=nullptr ? "true" : "false");
+#endif
+}
+
+void PingComponent::loop() {
+    if(mLastPingTime == 0) return;
+    uint32_t now = millis();
+    if(now - mLastPingTime > 1000) {
+        mLastPingTime = 0;
+#ifdef USE_BINARY_SENSOR
+        if(mPresenceSensor) {
+            mPresenceSensor->publish_state(false);
+        }
+#endif
+        ESP_LOGV(TAG, "PingComponent loop timeout");
+    }
+}
+
+void PingComponent::update() {
+    if(mTargetAddress.address <= 1) return;
+    ESP_LOGV(TAG, "PingComponent update send to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
+    uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PING), 'P', 'I', 'N', 'G' };
+    mLastPingTime = millis();
+    if(mSocket) mSocket->sendDatagram(pkt, 5, mTargetAddress, nullptr);
+}
+
+void PingComponent::openSocket() {
+    if(mTargetAddress.address == 0) return;
+    ESP_LOGI(TAG, "PingComponent openSocket to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
+    mSocket = new espmeshmesh::MeshSocket(MESHMESH_PING_PORT);
+    mSocket->recvDatagramCb(std::bind(&PingComponent::recvDatagram, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+    int8_t err = mSocket->open();
+    if(err < 0) {
+      ESP_LOGE(TAG, "Error opening socket: %d", err);
+    }
+}
+
+void PingComponent::set_target_address(uint32_t target_address) {
+    mTargetAddress.address = target_address;
+    ESP_LOGI(TAG, "PingComponent set_target_address: 0x%06X", mTargetAddress.address);
+}
+
+void PingComponent::set_repeaters(const std::vector<uint32_t> &value) {
+    mTargetAddress.repeaters = value;
+    ESP_LOGI(TAG, "PingComponent set_repeaters: %d", mTargetAddress.repeaters.size());
+}
+
+void PingComponent::recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi) {
+    uint32_t now = millis();
+    if(buf[0] == static_cast<uint8_t>(PingPacket::PING) && strncmp(reinterpret_cast<char *>(buf), "PING", 4) != 0) {
+        uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PONG), 'P', 'O', 'N', 'G' };
+        espmeshmesh::MeshAddress to = from;
+        to.port = MESHMESH_PING_PORT;
+        if(mSocket) mSocket->sendDatagram(pkt, 5, to, nullptr);
+        ESP_LOGV(TAG, "Received a PING packet from %06X on port %d", from.address, from.port);
+        return;
+    }   
+    if(buf[0] == static_cast<uint8_t>(PingPacket::PONG) && strncmp(reinterpret_cast<char *>(buf), "PONG", 4) != 0) {
+#ifdef USE_BINARY_SENSOR
+        if(mPresenceSensor) {
+            mPresenceSensor->publish_state(now - mLastPingTime < 1000);
+        }
+#endif
+#ifdef USE_SENSOR
+        if(mLatencySensor) {
+            mLatencySensor->publish_state(now - mLastPingTime);
+        }
+#endif
+        ESP_LOGV(TAG, "Received a PONG packet from %06X after %d ms", from.address, now - mLastPingTime);
+        mLastPingTime = 0;
+        return;
+    }    
+    ESP_LOGE(TAG, "Received unknown packet len %d", len);
+}
+
+}  // namespace meshmesh
+}  // namespace esphome
