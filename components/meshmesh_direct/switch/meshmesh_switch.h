@@ -2,7 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/switch/switch.h"
-#include "esphome/components/meshmesh_direct/meshmesh_direct.h"
+#include "../../meshmesh_direct/meshmesh_direct.h"
 
 namespace esphome {
 namespace meshmesh {
@@ -11,6 +11,7 @@ class MeshMeshDirectComponent;
 class MeshMeshSwitch : public switch_::Switch, public Component, public MeshMeshDirectCommandReplyHandler {
 public:
   void set_target(uint16_t hash, uint32_t address) { mHash = hash; mAddress = address; }
+  void set_parent(MeshMeshDirectComponent *mmdirect);
   float get_setup_priority() const override;
   void setup() override;
   void loop() override;

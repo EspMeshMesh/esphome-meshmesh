@@ -1,4 +1,5 @@
 #pragma once
+#include <meshaddress.h>
 
 #include "esphome/core/component.h"
 #include "esphome/components/meshmesh/meshmesh.h"
@@ -25,7 +26,7 @@
 #endif
 
 namespace espmeshmesh {
-  class EspMeshMesh;
+  class MeshSocket;
 }
 
 namespace esphome {
@@ -59,16 +60,14 @@ public:
   typedef enum { UNKNOW = 0, LUX, LAST_SENSOR_TYPE } SensorTypes;
   typedef enum { AllEntities = 0, SensorEntity, BinarySensorEntity, SwitchEntity, LightEntity,TextSensorEntity, LastEntity} EnityType;
 public:
-  static MeshMeshDirectComponent *singleton;
-  static MeshMeshDirectComponent *getInstance();
-public:
   MeshMeshDirectComponent();
   void setup();
   void dump_config() override;
+  espmeshmesh::MeshSocket *socket() { return mSocket; }
   // messhmesh: BEFORE_CONNECTION --> meshmesh_direct AFTER_CONNECTION --> Entities: LATE
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
   // Custom data received handlers
-  public:
+public:
   void register_received_handler(MeshMeshDirectReceivedPacketHandler *handler) { this->mReceivedHandlers.push_back(handler); }
 private:
   std::vector<MeshMeshDirectReceivedPacketHandler *> mReceivedHandlers;
@@ -106,21 +105,17 @@ private:
    private:
     EnityType findEntityTypeByHash(uint16_t hash);
 private:
-  int8_t handleFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handleEntityFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handleEntitiesCountFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handleGetEntityHashFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handleGetEntityStateFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handleSetEntityStateFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handlePublishEntityStateFrame(const uint8_t *data, uint16_t len, uint32_t from);
-  int8_t handleCustomDataFrame(const uint8_t *data, uint16_t len, uint32_t from);
+  void handleFrame(const uint8_t *data, uint16_t size, const espmeshmesh::MeshAddress &from, int16_t rssi);
+  void handleEntityFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  void handleEntitiesCountFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  void handleGetEntityHashFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  void handleGetEntityStateFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  void handleSetEntityStateFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  void handlePublishEntityStateFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  void handleCustomDataFrame(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
 private:
-int8_t handleCommandReply(const uint8_t *data, uint16_t len, uint32_t from);
-// Parent ESPMeshMesh component
-public:
-  espmeshmesh::EspMeshMesh *meshmesh() const { return mMeshmesh; }
-private:
-  espmeshmesh::EspMeshMesh *mMeshmesh{nullptr};
+  void handleCommandReply(const uint8_t *data, uint16_t len, const espmeshmesh::MeshAddress &from);
+  espmeshmesh::MeshSocket *mSocket{nullptr};
 };
 }  // namespace meshmesh
 }  // namespace esphome

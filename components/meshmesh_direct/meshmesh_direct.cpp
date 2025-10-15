@@ -5,6 +5,7 @@
 #include "esphome/core/application.h"
 
 #include <espmeshmesh.h>
+#include <meshsocket.h>
 
 #include <functional>
 
@@ -17,22 +18,19 @@
 #endif
 
 static const char *TAG = "meshmesh_direct";
-
+static const uint8_t MESHMESH_DIRECT_PORT = 0xA6;
 namespace esphome {
 namespace meshmesh {
 
-MeshMeshDirectComponent *MeshMeshDirectComponent::singleton = nullptr;
-
-MeshMeshDirectComponent *MeshMeshDirectComponent::getInstance() { return singleton; }
-
-MeshMeshDirectComponent::MeshMeshDirectComponent() : Component() {
-  if(singleton == nullptr)
-    singleton = this;
-}
+MeshMeshDirectComponent::MeshMeshDirectComponent() : Component() {}
 
 void MeshMeshDirectComponent::setup() {
-  mMeshmesh = global_meshmesh_component->getNetwork();
-  mMeshmesh->addHandleFrameCb(std::bind(&MeshMeshDirectComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+  mSocket = new espmeshmesh::MeshSocket(MESHMESH_DIRECT_PORT);
+  mSocket->recvDatagramCb(std::bind(&MeshMeshDirectComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+  int8_t err = mSocket->open();
+  if(err < 0) {
+    ESP_LOGE(TAG, "Error opening socket: %d", err);
+  }
 }
 
 void MeshMeshDirectComponent::broadcastSend(const uint8_t cmd, const uint8_t *data, const uint16_t len) {
@@ -40,8 +38,7 @@ void MeshMeshDirectComponent::broadcastSend(const uint8_t cmd, const uint8_t *da
   buff[0] = CMD_ENTITY_REQ;
   buff[1] = cmd;
   memcpy(buff+2, data, len);
-  if(mMeshmesh) mMeshmesh->broadCastSendData(buff, len+2);
-  else ESP_LOGE(TAG, "broadcastSend: Meshmesh parent not been initialized");
+  mSocket->sendDatagram(buff, len+2, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, espmeshmesh::MeshAddress::broadCastAddress), nullptr);
   delete buff;
 }
 
@@ -73,8 +70,7 @@ void MeshMeshDirectComponent::unicastSend(const uint8_t cmd, const uint8_t *data
   buff[0] = CMD_ENTITY_REQ;
   buff[1] = cmd;
   memcpy(buff+2, data, len);
-  if(mMeshmesh) mMeshmesh->uniCastSendData(buff, len+2, addr);
-  else ESP_LOGE(TAG, "unicastSend: Meshmesh parent not been initialized");
+  mSocket->sendDatagram(buff, len+2, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, addr), nullptr);
   delete buff;
 }
 
@@ -82,59 +78,52 @@ void MeshMeshDirectComponent::unicastSendCustom(const uint8_t *data, const uint1
   unicastSend(CUSTOM_DATA_REQ, data, len, addr);
 }
 
-int8_t MeshMeshDirectComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
-  if(len < 2 || buf[0] != CMD_ENTITY_REQ) {
-    return -1;
+void MeshMeshDirectComponent::handleFrame(const uint8_t *data, uint16_t size, const espmeshmesh::MeshAddress &from, int16_t rssi) {
+  if(size < 1 || data[0] != CMD_ENTITY_REQ) {
+    return;
   }
 
-  int8_t err = handleEntityFrame(buf+1, len-1, from);
-  return err;
+  handleEntityFrame(data+1, size-1, from);
 }
 
-int8_t MeshMeshDirectComponent::handleEntityFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
-    if(len < 1) {
-      return 1;
-    }
+void MeshMeshDirectComponent::handleEntityFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
+    if(len < 1) return;
 
     if (buf[0] & 0x01) {
-      return handleCommandReply(buf, len, from);
+      handleCommandReply(buf, len, from);
     }
 
     switch (buf[0]) {
-
       case ENTITIES_COUNT_REQ:
-        return handleEntitiesCountFrame(buf, len, from);
+        handleEntitiesCountFrame(buf, len, from);
       break;
 
     case GET_ENTITY_HASH_REQ:
-      return handleGetEntityHashFrame(buf, len, from);
+      handleGetEntityHashFrame(buf, len, from);
       break;
 
     case GET_ENTITY_STATE_REQ:
-      return handleGetEntityStateFrame(buf, len, from);
+      handleGetEntityStateFrame(buf, len, from);
       break;
 
     case SET_ENTITY_STATE_REQ:
-      return handleSetEntityStateFrame(buf, len, from);
+      handleSetEntityStateFrame(buf, len, from);
       break;
 
     case PUB_ENTITY_STATE_REQ:
-      return handlePublishEntityStateFrame(buf, len, from);
+      handlePublishEntityStateFrame(buf, len, from);
       break;
 
     case CUSTOM_DATA_REQ:
-      return handleCustomDataFrame(buf, len, from);
+      handleCustomDataFrame(buf, len, from);
       break;
 
     default:
-        return -1;
-        break;
+      break;
     }
-
-    return -1;
 }
 
-int8_t MeshMeshDirectComponent::handleEntitiesCountFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handleEntitiesCountFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len == 1) {
     uint8_t rep[LastEntity + 2];
     rep[0] = CMD_ENTITY_REQ;
@@ -165,13 +154,11 @@ int8_t MeshMeshDirectComponent::handleEntitiesCountFrame(const uint8_t *buf, uin
     buf[TextSensorEntity] = (uint8_t) App.get_text_sensors().size();
     buf[AllEntities] += buf[TextSensorEntity];
 #endif
-    mMeshmesh->commandReply(rep, LastEntity + 2);
-    return 0;
+    mSocket->sendDatagram(rep, LastEntity + 2, from, nullptr);
   }
-  return 1;
 }
 
-int8_t MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len == 3) {
     uint8_t service = buf[1];
     uint8_t index = buf[2];
@@ -241,8 +228,8 @@ int8_t MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uin
       rep[1] = GET_ENTITY_HASH_REP;
       espmeshmesh::uint16toBuffer(rep + 2, hash);
       memcpy(rep + 4, info.c_str(), info.length());
-      mMeshmesh->commandReply(rep, 4 + info.length());
-      return 0;
+      mSocket->sendDatagram(rep, 4 + info.length(), from, nullptr);
+      return;
       delete rep;
     } else {
       uint8_t rep[6];
@@ -252,14 +239,13 @@ int8_t MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uin
       rep[3] = 0;
       rep[4] = 'E';
       rep[5] = '!';
-      mMeshmesh->commandReply(rep, 6);
-      return 0;
+      mSocket->sendDatagram(rep, 6, from, nullptr);
+      return;
     }
   }
-  return 1;
 }
 
-int8_t MeshMeshDirectComponent::handleGetEntityStateFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handleGetEntityStateFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len == 4) {
     EnityType type = (EnityType) buf[1];
     uint16_t hash = espmeshmesh::uint16FromBuffer(buf + 2);
@@ -329,9 +315,8 @@ int8_t MeshMeshDirectComponent::handleGetEntityStateFrame(const uint8_t *buf, ui
       rep[2] = value_type;
       espmeshmesh::uint16toBuffer(rep + 3, hash);
       espmeshmesh::uint16toBuffer(rep + 5, value);
-      if(mMeshmesh) mMeshmesh->commandReply(rep, 7);
-      else ESP_LOGE(TAG, "handleGetEntityStateFrame: Meshmesh parent not been initialized");
-      return 0;
+      mSocket->sendDatagram(rep, 7, from, nullptr);
+      return;
     } else if (value_type == 2) {
       uint16_t rep_size = 5 + value_str.length();
       auto *rep = new uint8_t[rep_size];
@@ -340,17 +325,16 @@ int8_t MeshMeshDirectComponent::handleGetEntityStateFrame(const uint8_t *buf, ui
       rep[2] = value_type;
       espmeshmesh::uint16toBuffer(rep + 3, hash);
       memcpy(rep + 5, value_str.data(), value_str.length());
-      if(mMeshmesh) mMeshmesh->commandReply(rep, rep_size);
-      else ESP_LOGE(TAG, "handleGetEntityStateFrame: Meshmesh parent not been initialized");
-      return 0;
+      mSocket->sendDatagram(rep, rep_size, from, nullptr);
+      return;
     } else {
       ESP_LOGE(TAG, "handleGetEntityStateFrame: Unknown entity with hash %04X", hash);
     }
   }
-  return 1;
+  return;
 }
 
-int8_t MeshMeshDirectComponent::handleSetEntityStateFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handleSetEntityStateFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len >= 7) {
     uint8_t value_type = buf[1];
     EnityType entity_type = (EnityType) buf[2];
@@ -398,16 +382,16 @@ int8_t MeshMeshDirectComponent::handleSetEntityStateFrame(const uint8_t *buf, ui
       uint8_t rep[2];
       rep[0] = CMD_ENTITY_REQ;
       rep[1] = GET_ENTITY_STATE_REP;
-      mMeshmesh->commandReply(rep, 2);
-      return 0;
+      mSocket->sendDatagram(rep, 2, from, nullptr);
+      return;
     } else {
       ESP_LOGE(TAG, "handleSetEntityStateFrame: Unknown entity with hash %04X", hash);
     }
   }
-  return 1;
+  return;
 }
 
-int8_t MeshMeshDirectComponent::handlePublishEntityStateFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handlePublishEntityStateFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len == 6) {
     EnityType type = (EnityType) buf[1];
     uint16_t hash = espmeshmesh::uint16FromBuffer(buf + 2);
@@ -440,33 +424,33 @@ int8_t MeshMeshDirectComponent::handlePublishEntityStateFrame(const uint8_t *buf
     uint8_t rep[2];
     rep[0] = CMD_ENTITY_REQ;
     rep[1] = PUB_ENTITY_STATE_REP;
-    mMeshmesh->commandReply(rep, 2);
-    return 0;
+    mSocket->sendDatagram(rep, 2, from, nullptr);
+    return;
   }
-  return 1;
+  return;
 }
 
-int8_t MeshMeshDirectComponent::handleCustomDataFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handleCustomDataFrame(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len > 1) {
     const uint8_t *data = buf + 1;
     for (auto handler : mReceivedHandlers) {
-      handler->on_received(from, data, len-1);
+      handler->on_received(from.address, data, len-1);
     }
-    return 0;
+    return;
   }
-  return 1;
+  return;
 }
 
-int8_t MeshMeshDirectComponent::handleCommandReply(const uint8_t *buf, uint16_t len, uint32_t from) {
+void MeshMeshDirectComponent::handleCommandReply(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from) {
   if (len >= 1) {
     uint8_t cmd = buf[0];
     for (auto handler : mCommandReplyHandlers) {
-      if(handler->onCommandReply(from, cmd, buf+1, len-1)) {
-        return 0;
+      if(handler->onCommandReply(from.address, cmd, buf+1, len-1)) {
+        return;
       }
     }
   }
-  return 0;
+  return;
 }
 
 #ifdef USE_SENSOR
@@ -559,8 +543,7 @@ void MeshMeshDirectComponent::publishRemoteSwitchState(uint32_t addr, uint16_t h
   buff[2] = SwitchEntity;
   espmeshmesh::uint16toBuffer(buff+3, hash);
   espmeshmesh::uint16toBuffer(buff+5, state ? 10 : 0);
-  if(mMeshmesh) mMeshmesh->uniCastSendData(buff, 7, addr);
-  else ESP_LOGE(TAG, "publishRemoteSwitchState: Meshmesh parent not been initialized");
+  mSocket->sendDatagram(buff, 7, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, addr), nullptr);
 }
 #endif
 
