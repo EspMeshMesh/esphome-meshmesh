@@ -1,5 +1,7 @@
 #include "meshmesh_switch.h"
-#include "esphome/core/log.h"
+
+#include <esphome/core/hal.h>
+#include <esphome/core/log.h>
 
 #include "../meshmesh_direct.h"
 #include "../commands.h"

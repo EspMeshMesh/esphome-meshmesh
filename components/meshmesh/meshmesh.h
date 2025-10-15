@@ -13,6 +13,7 @@ extern "C" {
 
 namespace espmeshmesh {
   class EspMeshMesh;
+  class MeshAddress;
 }
 
 namespace esphome {
@@ -59,7 +60,7 @@ public:
   float get_setup_priority() const override { return setup_priority::BEFORE_CONNECTION; }
   void loop() override;
 private:
-  int8_t handleFrame(const uint8_t *buf, uint16_t len, uint32_t from);
+  int8_t handleFrame(const uint8_t *data, uint16_t size,const espmeshmesh::MeshAddress &from, int16_t rssi);
 #ifdef USE_LOGGER
   void sendLog(int level, const char *tag, const char *payload);
 #endif

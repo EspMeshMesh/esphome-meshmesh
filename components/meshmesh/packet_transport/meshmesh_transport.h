@@ -32,7 +32,7 @@ protected:
 private:
   void openSocket();
   void handleFrame(uint8_t *buf, uint16_t len);
-  void recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi);
+  void recvDatagram(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi);
   void sentStatus(bool success);
 
 private:
