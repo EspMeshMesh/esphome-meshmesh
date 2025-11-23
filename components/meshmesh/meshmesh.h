@@ -44,6 +44,7 @@ public:
   espmeshmesh::EspMeshMesh *getNetwork() { return mesh; }
   void setChannel(int channel) { mConfigChannel = channel; }
   void setAesPassword(const char *password);
+  void setIsCoordinator() { mConfigIsCoordinator = true; }
   void set_uart_selection(UARTSelection uart_selection) { /*FIXME: uart_ = uart_selection;*/}
 private:
   void defaultPreferences();
@@ -52,7 +53,8 @@ private:
   ESPPreferenceObject mPreferencesObject;
   MeshmeshSettings mPreferences;
 private:
-uint8_t mConfigChannel;
+  uint8_t mConfigChannel;
+  bool mConfigIsCoordinator{false};
 public:
   void pre_setup();
   void setup() override;

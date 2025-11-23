@@ -79,6 +79,7 @@ void MeshmeshComponent::setup() {
     .hostname = App.get_name().c_str(),
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
+    .isCoordinator = mConfigIsCoordinator,
   };
 
 #ifdef USE_LOGGER
@@ -94,6 +95,7 @@ void MeshmeshComponent::setup() {
 
 void MeshmeshComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Meshmesh");
+  ESP_LOGCONFIG(TAG, "Is Coordinator: %d", mConfigIsCoordinator);
 #ifdef USE_ESP32
   ESP_LOGCONFIG(TAG, "Sys cip ID: %08lX", espmeshmesh::Discovery::chipId());
 #else
