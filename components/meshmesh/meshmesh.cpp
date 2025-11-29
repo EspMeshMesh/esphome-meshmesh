@@ -80,6 +80,7 @@ void MeshmeshComponent::setup() {
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
     .isCoordinator = mConfigIsCoordinator,
+    .fwVersion = ESPHOME_VERSION,
   };
 
 #ifdef USE_LOGGER
