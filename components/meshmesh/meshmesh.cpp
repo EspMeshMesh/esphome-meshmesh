@@ -76,11 +76,12 @@ void MeshmeshComponent::pre_setup() {
 
 void MeshmeshComponent::setup() {
   espmeshmesh::EspMeshMeshSetupConfig config = {
-    .hostname = App.get_name().c_str(),
+    .hostname = App.get_name(),
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
     .isCoordinator = mConfigIsCoordinator,
     .fwVersion = ESPHOME_VERSION,
+    .compileTime = App.get_compilation_time()
   };
 
 #ifdef USE_LOGGER
