@@ -31,7 +31,7 @@ HARDWARE_UART_TO_UART_SELECTION = {
     DEFAULT: meshmesh_ns.UART_SELECTION_DEFAULT,
 }
 
-CONF_BONDING_MODE = "bonding_mode"
+CONF_USE_STARPATH = "use_starpath"
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -43,7 +43,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_TX_BUFFER_SIZE, default=4096): cv.validate_bytes,
         cv.Required(CONF_CHANNEL): cv.positive_int,
         cv.Required(CONF_PASSWORD): cv.string,
-        cv.Optional(CONF_BONDING_MODE, default=False): cv.boolean,
+        cv.Optional(CONF_USE_STARPATH, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -51,8 +51,9 @@ CONFIG_SCHEMA = cv.Schema(
 @coroutine_with_priority(40.0)
 async def to_code(config):
     cg.add_define("USE_MESH_MESH")
-    if CONF_BONDING_MODE in config and config[CONF_BONDING_MODE]:
-        cg.add_define("USE_BONDING_MODE")
+
+    if CONF_USE_STARPATH in config and config[CONF_USE_STARPATH]:
+        cg.add_build_flag("-DESPMESH_STARPATH_ENABLED")
 
     if CORE.is_esp8266:
         cg.add_build_flag("-Wl,-wrap=ppEnqueueRxq")
@@ -79,7 +80,7 @@ async def to_code(config):
 
     cg.add_library(
         name="ESPMeshMesh-dev",
-        version="1.3.2",
+        version="1.3.3",
         repository="persuader72/ESPMeshMesh-dev",
         #repository="file:///home/stefano/Sviluppo/Stefano/Meshmesh/workspace/espmeshmesh/",
     )

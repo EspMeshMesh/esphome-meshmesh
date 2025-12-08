@@ -33,9 +33,6 @@ struct MeshmeshSettings {
   uint8_t txPower;
   uint8_t flags;
   uint32_t groups;
-#ifdef USE_BONDING_MODE
-  uint32_t bonded_node;
-#endif
 } __attribute__((packed));
 
 class MeshmeshComponent : public Component {

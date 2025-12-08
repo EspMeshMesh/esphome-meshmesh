@@ -51,13 +51,6 @@ void MeshmeshComponent::defaultPreferences() {
   mPreferences.flags = 0;
   mPreferences.log_destination = 0;
   mPreferences.groups = 0;
-#ifdef USE_BONDING_MODE
-  // The bonding will permit this node to receive frames only from the bonded node.
-  // * 0x0: bonding is disabled,
-  // * UINT32_MAX: node not bondend,
-  // * otherwise: the node id of the bonded node
-  mPreferences.bonded_node = UINT32_MAX;
-#endif
 }
 
 void MeshmeshComponent::preSetupPreferences() {
