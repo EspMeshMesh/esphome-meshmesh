@@ -7,14 +7,21 @@ from esphome.const import CONF_ID, CONF_ADDRESS, CONF_TIMEOUT
 CODEOWNERS = ["@persuader72"]
 DEPENDENCIES = ["meshmesh"]
 CONF_REPEATERS = "repeaters"
-CONF_COORDINATOR_ADDRESS = 2**32 - 2
+CONF_COORDINATOR_ADDRESS = "coordinator"
 
 PingComponent = meshmesh_ns.class_("PingComponent", cg.PollingComponent)
+
+MESH_SPECIAL_ADDRESSES = {
+#    "broadcast": 2**32 - 1,
+    "coordinator": 2**32 - 2,
+#    "invalid": 0,
+    "server": 1,
+}
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(PingComponent),
-        cv.Optional(CONF_ADDRESS, default=CONF_COORDINATOR_ADDRESS): cv.positive_int,
+        cv.Optional(CONF_ADDRESS, default=CONF_COORDINATOR_ADDRESS): cv.Any(cv.enum(MESH_SPECIAL_ADDRESSES), cv.positive_int),
         cv.Optional(CONF_REPEATERS, cv.UNDEFINED): cv.ensure_list(cv.positive_int),
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(cv.polling_component_schema("60s"))

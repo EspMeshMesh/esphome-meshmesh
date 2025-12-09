@@ -139,6 +139,20 @@ Configuration variables:
 
 The ping component check periodically the connection with another node of the network it provide a presence sensor (binary_sensor) and a latency sensor to trigger actions when the network connectivity change.
 
+
+Example config on the pinged device
+
+```yaml
+ping:
+  address: server
+```
+
+Example config to ping only the coordinator
+
+```yaml
+ping:
+```
+
 Example config on the pinger device
 
 ```yaml
@@ -160,14 +174,8 @@ sensor:
       id: latency
 ```
 
-Example config on the pinged device
-
-```yaml
-ping:
-```
-
 Configuration variables:
 
 * **update_interval**  (Optional, Time): The interval between pings. Defaults to 30s.
-* **address** (Optional, int): The address for the remote node to ping. None if is a passive only node.
+* **address** (Optional, server, coordinator or int): The address for the remote node to ping, use keyword server to ping if the device is passive, use the keyword coordinator to ping the coordinator in a dynamic network.
 * **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.
