@@ -51,13 +51,6 @@ void MeshmeshComponent::defaultPreferences() {
   mPreferences.flags = 0;
   mPreferences.log_destination = 0;
   mPreferences.groups = 0;
-#ifdef USE_BONDING_MODE
-  // The bonding will permit this node to receive frames only from the bonded node.
-  // * 0x0: bonding is disabled,
-  // * UINT32_MAX: node not bondend,
-  // * otherwise: the node id of the bonded node
-  mPreferences.bonded_node = UINT32_MAX;
-#endif
 }
 
 void MeshmeshComponent::preSetupPreferences() {
@@ -76,9 +69,12 @@ void MeshmeshComponent::pre_setup() {
 
 void MeshmeshComponent::setup() {
   espmeshmesh::EspMeshMeshSetupConfig config = {
-    .hostname = App.get_name().c_str(),
+    .hostname = App.get_name(),
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
+    .isCoordinator = mConfigIsCoordinator,
+    .fwVersion = ESPHOME_VERSION,
+    .compileTime = App.get_compilation_time()
   };
 
 #ifdef USE_LOGGER
@@ -89,11 +85,12 @@ void MeshmeshComponent::setup() {
 
 
   mesh->setup(&config);
-  mesh->addHandleFrameCb(std::bind(&MeshmeshComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+  mesh->addHandleFrameCb(std::bind(&MeshmeshComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
 }
 
 void MeshmeshComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Meshmesh");
+  ESP_LOGCONFIG(TAG, "Is Coordinator: %d", mConfigIsCoordinator);
 #ifdef USE_ESP32
   ESP_LOGCONFIG(TAG, "Sys cip ID: %08lX", espmeshmesh::Discovery::chipId());
 #else
@@ -112,11 +109,11 @@ void MeshmeshComponent::loop() {
   }
 }
 
-int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t from) {
+int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const espmeshmesh::MeshAddress &from, int16_t rssi) {
   //ESP_LOGD(TAG, "handleFrame: %d, len: %d, from: %d", buf[0], len, from);
-  switch (buf[0]) {
+  switch (data[0]) {
     case CMD_NODE_TAG_REQ:
-      if (len == 1) {
+      if (size == 1) {
         uint8_t rep[33] = {0};
         rep[0] = CMD_NODE_TAG_REP;
         memcpy(rep + 1, mPreferences.devicetag, 32);
@@ -125,9 +122,9 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_NODE_TAG_SET_REQ:
-      if (len > 1) {
-        memcpy(mPreferences.devicetag, buf + 1, len - 1);
-        mPreferences.devicetag[len - 1] = 0;
+      if (size > 1) {
+        memcpy(mPreferences.devicetag, data + 1, size - 1);
+        mPreferences.devicetag[size - 1] = 0;
         mPreferencesObject.save(&mPreferences);
         uint8_t rep[1] = {CMD_NODE_TAG_SET_REP};
         mesh->commandReply(rep, 1);
@@ -135,8 +132,8 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_CHANNEL_SET_REQ:
-      if (len == 2) {
-        uint8_t channel = buf[1];
+      if (size == 2) {
+        uint8_t channel = data[1];
         if (channel < MAX_CHANNEL) {
           mPreferences.channel = channel;
           mPreferencesObject.save(&mPreferences);
@@ -147,7 +144,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_NODE_CONFIG_REQ:
-      if (len == 1) {
+      if (size == 1) {
         uint8_t rep[sizeof(MeshmeshSettings) + 1];
         rep[0] = CMD_NODE_CONFIG_REP;
         memcpy(rep + 1, &mPreferences, sizeof(MeshmeshSettings));
@@ -156,7 +153,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_LOG_DEST_REQ:
-      if (len == 1) {
+      if (size == 1) {
         uint8_t rep[5] = {0};
         rep[0] = CMD_LOG_DEST_REP;
         espmeshmesh::uint32toBuffer(rep + 1, mPreferences.log_destination);
@@ -165,8 +162,8 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_LOG_DEST_SET_REQ:
-      if (len == 5) {
-        mPreferences.log_destination = espmeshmesh::uint32FromBuffer(buf + 1);
+      if (size == 5) {
+        mPreferences.log_destination = espmeshmesh::uint32FromBuffer(data + 1);
         mPreferencesObject.save(&mPreferences);
         uint8_t rep[1] = {CMD_LOG_DEST_SET_REP};
         mesh->commandReply(rep, 1);
@@ -174,7 +171,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
       case CMD_GROUPS_REQ:
-      if (len == 1) {
+      if (size == 1) {
         uint8_t rep[5] = {0};
         rep[0] = CMD_GROUPS_REP;
         espmeshmesh::uint32toBuffer(rep + 1, mPreferences.groups);
@@ -183,8 +180,8 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_GROUPS_SET_REQ:
-      if (len == 5) {
-        mPreferences.groups = espmeshmesh::uint32FromBuffer(buf + 1);
+      if (size == 5) {
+        mPreferences.groups = espmeshmesh::uint32FromBuffer(data + 1);
         mPreferencesObject.save(&mPreferences);
         uint8_t rep[1] = {CMD_GROUPS_SET_REP};
         mesh->commandReply(rep, 1);
@@ -192,7 +189,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_FIRMWARE_REQ:
-      if (len == 1) {
+      if (size == 1) {
         size_t size = 1 + strlen(ESPHOME_VERSION) + 1 + App.get_compilation_time().length() + 1;
         uint8_t *rep = new uint8_t[size];
         rep[0] = CMD_FIRMWARE_REP;
@@ -206,7 +203,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *buf, uint16_t len, uint32_t
       }
       break;
     case CMD_REBOOT_REQ:
-      if (len == 1) {
+      if (size == 1) {
         mRebootRequested = true;
         mRebootRequestedTime = millis();
         uint8_t rep[1] = {CMD_REBOOT_REP};

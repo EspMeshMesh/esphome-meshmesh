@@ -19,8 +19,17 @@ UART1 = "UART1"
 UART2 = "UART2"
 DEFAULT = "DEFAULT"
 
+CONF_IS_COORDINATOR = "is_coordinator"
+
 meshmesh_ns = cg.esphome_ns.namespace("meshmesh")
 MeshmeshComponent = meshmesh_ns.class_("MeshmeshComponent", cg.Component)
+
+MESH_SPECIAL_ADDRESSES = {
+    "broadcast": 2**32 - 1,
+    "coordinator": 2**32 - 2,
+    "invalid": 0,
+    "server": 1,
+}
 
 HARDWARE_UART_TO_UART_SELECTION = {
     UART0: meshmesh_ns.UART_SELECTION_UART0,
@@ -29,18 +38,19 @@ HARDWARE_UART_TO_UART_SELECTION = {
     DEFAULT: meshmesh_ns.UART_SELECTION_DEFAULT,
 }
 
-CONF_BONDING_MODE = "bonding_mode"
+CONF_USE_STARPATH = "use_starpath"
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(MeshmeshComponent),
+        cv.Optional(CONF_IS_COORDINATOR, default=False): cv.boolean,
         cv.Optional(CONF_HARDWARE_UART, default=0): cv.positive_int,
         cv.Optional(CONF_BAUD_RATE, default=460800): cv.positive_int,
         cv.Optional(CONF_RX_BUFFER_SIZE, default=2048): cv.validate_bytes,
         cv.Optional(CONF_TX_BUFFER_SIZE, default=4096): cv.validate_bytes,
         cv.Required(CONF_CHANNEL): cv.positive_int,
         cv.Required(CONF_PASSWORD): cv.string,
-        cv.Optional(CONF_BONDING_MODE, default=False): cv.boolean,
+        cv.Optional(CONF_USE_STARPATH, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -48,14 +58,14 @@ CONFIG_SCHEMA = cv.Schema(
 @coroutine_with_priority(40.0)
 async def to_code(config):
     cg.add_define("USE_MESH_MESH")
-    cg.add_define("USE_POLITE_BROADCAST_PROTOCOL")
-    cg.add_define("USE_MULTIPATH_PROTOCOL")
-    cg.add_define("USE_CONNECTED_PROTOCOL")
-    if CONF_BONDING_MODE in config and config[CONF_BONDING_MODE]:
-        cg.add_define("USE_BONDING_MODE")
+
+    if CONF_USE_STARPATH in config and config[CONF_USE_STARPATH]:
+        cg.add_build_flag("-DESPMESH_STARPATH_ENABLED")
 
     if CORE.is_esp8266:
         cg.add_build_flag("-Wl,-wrap=ppEnqueueRxq")
+
+    #cg.add_build_flag("-DUSE_POLITE_BROADCAST_PROTOCOL")
 
     var = cg.Pvariable(
         config[CONF_ID],
@@ -67,6 +77,8 @@ async def to_code(config):
     )
     cg.add(var.setChannel(config[CONF_CHANNEL]))
     cg.add(var.setAesPassword(config[CONF_PASSWORD]))
+    if config[CONF_IS_COORDINATOR]:
+        cg.add(var.setIsCoordinator())
     if CONF_HARDWARE_UART in config:
         cg.add(var.set_uart_selection(HARDWARE_UART_TO_UART_SELECTION["UART0"]))
     cg.add(var.pre_setup())
@@ -74,11 +86,10 @@ async def to_code(config):
         cg.add_library("ESP8266WiFi", None)
 
     cg.add_library(
-        name="ESPMeshMesh",
-        version="1.2.5",
-        repository="persuader72/ESPMeshMesh",
+        name="ESPMeshMesh-dev",
+        version="1.3.3",
+        repository="persuader72/ESPMeshMesh-dev",
+        #repository="file:///home/stefano/Sviluppo/Stefano/Meshmesh/workspace/espmeshmesh/",
     )
-
-
 
     await cg.register_component(var, config)

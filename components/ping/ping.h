@@ -41,7 +41,7 @@ public:
   float get_setup_priority() const override { return esphome::setup_priority::AFTER_WIFI; }
 private:
   void openSocket();
-  void recvDatagram(uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi);
+  void recvDatagram(const uint8_t *data, uint16_t size, const espmeshmesh::MeshAddress &from, int16_t rssi);
 private:
   espmeshmesh::MeshSocket *mSocket{nullptr};
 #ifdef USE_BINARY_SENSOR

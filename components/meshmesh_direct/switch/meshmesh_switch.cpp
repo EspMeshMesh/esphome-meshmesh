@@ -1,8 +1,10 @@
 #include "meshmesh_switch.h"
-#include "esphome/core/log.h"
 
-#include "esphome/components/meshmesh_direct/meshmesh_direct.h"
-#include "esphome/components/meshmesh_direct/commands.h"
+#include <esphome/core/hal.h>
+#include <esphome/core/log.h>
+
+#include "../meshmesh_direct.h"
+#include "../commands.h"
 
 #include <packetbuf.h>
 
@@ -19,9 +21,12 @@ struct MeshMeshSwitchState {
   bool initalState;
 };
 
-void MeshMeshSwitch::setup() {
-  mMMDirect = MeshMeshDirectComponent::getInstance();
+void MeshMeshSwitch::set_parent(MeshMeshDirectComponent *mmdirect) {
+  mMMDirect = mmdirect;
   mMMDirect->registerCommandReplyHandler(this);
+}
+
+void MeshMeshSwitch::setup() {
   mRequestUpdate = true;
   mRequestTime = millis();
 }
@@ -40,7 +45,6 @@ void MeshMeshSwitch::loop() {
   }
 }
 
-
 void MeshMeshSwitch::dump_config() {
   ESP_LOGCONFIG(TAG, "Setting up remote switch '%s'...", this->name_.c_str());
   ESP_LOGCONFIG(TAG, " Remote address: 0x%06X", mAddress);
@@ -48,7 +52,7 @@ void MeshMeshSwitch::dump_config() {
 }
 
 void MeshMeshSwitch::queryRemoteState() {
-  if(mMMDirect && mMMDirect->meshmesh()) {
+  if(mMMDirect && mMMDirect->socket()) {
     uint8_t buff[3];
     buff[0] = MeshMeshDirectComponent::SwitchEntity;
     espmeshmesh::uint16toBuffer(buff+1, mHash);
@@ -73,7 +77,7 @@ bool MeshMeshSwitch::onCommandReply(uint32_t from, uint8_t cmd, const uint8_t *d
 }
 
 void MeshMeshSwitch::write_state(bool state) {
-  if(mMMDirect && mMMDirect->meshmesh()) {
+  if(mMMDirect->socket()) {
     uint8_t buff[6];
     buff[0] = 1;
     buff[1] = MeshMeshDirectComponent::SwitchEntity;
