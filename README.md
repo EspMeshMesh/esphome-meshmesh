@@ -1,21 +1,6 @@
-# [ESPMeshMesh Network](https://github.com/EspMeshMesh/esphome-meshmesh)
+# [ESPMeshMesh Network](https://www.espmeshmesh.org/) components
 
 ESPMeshMesh is an implementation of a protocol for mesh communication of [ESPHome](https://esphome.io/) nodes that works on ESP8266 and ESP32 based boards and can be integrated with a Home Assistant instance.  The protocol is based on the **802.11B** frame format and is compatible with the radio equipment of chips such as **ESP32** and **ESP8266**.
-
-This repository contains the firmware to load on devices .
-
-1. Is based on the  [ESPHome](https://esphome.io/) firmware
-2. It relies on raw **802.11B** packets and does not require a wifi AP to  work 
-3. The packets can make jumps on intermediate devices to extend the  range of the network. 
-4. There is not any limit on number of nodes. 
-5. Beacons are not required to maintain active the connections (less  electromagnetic pollution)
-6. Compatible with the [ESPHome](https://esphome.io/) API component 
-7. Compatible with [Home Assistant](https://www.home-assistant.io/)  trough the software HUB [meshmeshgo](https://github.com/EspMeshMesh/meshmeshgo). 
-8. It require a single [ESPHome](https://esphome.io/) device connected to elaboration unit that run the [HUB](https://github.com/EspMeshMesh/meshmeshgo) software.
-9. The topology of the network is dynamic and can be changed easily
-10. Implemented from scratch not based from other mesh technologies.
-
-For further explanation and tutorials, go to: [meshmeshgo](https://github.com/EspMeshMesh/meshmeshgo) page.
 
 ## Use as external component
 
@@ -36,11 +21,13 @@ socket:
   implementation: meshmesh_esp8266
 ```
 
-* implementation (Required, string): Is the socket implementation compatible with the mesh network architecture. Must be always set to the **meshmesh_esp8266** value.
+* implementation (Required, string): Is the socket implementation compatible with the mesh network architecture. Must be set to **meshmesh_esp8266** or **meshmesh_esp32** value depending on the architecture of the cpu.
 
 ## Meshmesh component
 
 This component allows ESPHome to communicate with other ESPHome devices using a mesh protocol based on the 802.11B frame. This network is compatible with both ESP8266 and ESP32 devices.
+
+### Example Configuration
 
 ```yaml
 # Example configuration 
@@ -48,6 +35,7 @@ meshmesh:
   channel: 3
   password: !secret meshmesh_password
 ```
+### Configuration Variables
 
 * **channel** (Required, int): The Wi-Fi channel that ESPMeshmesh will use to send/receive data packets. 
 * **password** (Required, string): The AES shared secret used to encrypt all packets on the network.
@@ -58,8 +46,11 @@ meshmesh:
 * **is_coordinator** (Optional, bool) default **false**: Define is this node is a coordinator or not. This will permit the correct initialization of some protocols.
 * **use_starpath** (Optional, bool) default **false**: Enable the new experimental protocol that implement the dynamic network.
 
+### Simple example
+
+#### Coordinator node
+
 ```yaml
-# Example configuration for coordinator node
 meshmesh:
   baud_rate: 460800
   rx_buffer_size: 2048
@@ -70,8 +61,9 @@ meshmesh:
   use_starpath: true
 ```
 
+#### Generic network node
+
 ```yaml
-# Example configuration for generic network node
 meshmesh:
   baud_rate: 0
   rx_buffer_size: 0
@@ -83,7 +75,9 @@ meshmesh:
 
 ## Packet Transport Platform
 
-The MeshMesh component provide a packet transport platform implementation. 
+The [Packet Transport Component](https://esphome.io/components/packet_transport) platform allows ESPHome nodes to directly communicate with each over a communication channel. The MeshMesh implementation of the platform uses MeshMesh as a communication medium. See the [Packet Transport Component](https://esphome.io/components/packet_transport) and [MeshMesh communication](#meshmesh-component) Component for more information.
+
+### Example Configuration
 
 ```yaml
 # Example configuration entry for packet transport over espmeshmesh.
@@ -97,8 +91,50 @@ packet_transport:
 
 ```
 
+### Configuration Variables
+
 * **address** (Required, **server**, **coordinator**, **broadcast** or int): The address for the destination of the transport packets, use keyword **server** will only receive data, use the keyword **coordinator** to send data to the coordinator in a dynamic network, ise **broadcast** to send data to all neighbors. Default is **coordinator**. 
 * **repeaters** (Optional, list of int) The sequence of repeaters to use to reach the address.
+* All other options from the [Packet Transport Component](https://esphome.io/components/packet_transport/)
+
+### Simple example
+
+Let consider a node with id 0x112233 as provider and a node with id 0xB56EC4 as consumer.
+
+#### Provider node configuration
+
+```yaml
+packet_transport:
+  - platform: meshmesh
+    update_interval: 5s
+    address: 0xB56EC4
+    sensors:
+      - uptime_sensor
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
+    id: uptime_sensor
+```
+
+#### Consumer node configuration
+
+```yaml
+packet_transport:
+  - platform: meshmesh
+    update_interval: 5s
+    address: 0xC0E5A8
+    providers:
+      - name: prov-temp-sensor
+
+sensor:
+  - platform: packet_transport
+    internal: false
+    name: Remote Uptime
+    provider: prov-temp-sensor
+    id: remote_uptime_sensor
+    remote_id: uptime_sensor
+```
 
 ## Meshmesh Direct
 
@@ -198,7 +234,6 @@ sensor:
     latency:
       id: latency
 ```
-
 
 Configuration variables:
 
