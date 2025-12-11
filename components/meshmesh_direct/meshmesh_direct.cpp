@@ -229,7 +229,6 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
       espmeshmesh::uint16toBuffer(rep + 2, hash);
       memcpy(rep + 4, info.c_str(), info.length());
       mSocket->sendDatagram(rep, 4 + info.length(), from, nullptr);
-      return;
       delete rep;
     } else {
       uint8_t rep[6];
@@ -240,7 +239,6 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
       rep[4] = 'E';
       rep[5] = '!';
       mSocket->sendDatagram(rep, 6, from, nullptr);
-      return;
     }
   }
 }

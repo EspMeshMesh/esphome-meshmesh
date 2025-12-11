@@ -45,7 +45,6 @@ void MeshMeshSwitch::loop() {
   }
 }
 
-
 void MeshMeshSwitch::dump_config() {
   ESP_LOGCONFIG(TAG, "Setting up remote switch '%s'...", this->name_.c_str());
   ESP_LOGCONFIG(TAG, " Remote address: 0x%06X", mAddress);
@@ -53,7 +52,7 @@ void MeshMeshSwitch::dump_config() {
 }
 
 void MeshMeshSwitch::queryRemoteState() {
-  if(mMMDirect->socket()) {
+  if(mMMDirect && mMMDirect->socket()) {
     uint8_t buff[3];
     buff[0] = MeshMeshDirectComponent::SwitchEntity;
     espmeshmesh::uint16toBuffer(buff+1, mHash);
