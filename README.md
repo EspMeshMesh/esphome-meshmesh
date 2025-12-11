@@ -55,6 +55,8 @@ meshmesh:
 * **baud_rate** (Optional, int) default to **460800**: Baud rate of the serial port used to communicate with the HUB.
 * **rx_buffer_size** (Optional, int) default to **2048**: Receive buffer size for the serial port used to communicate with the HUB.
 * **tx_buffer_size** (Optional, int) default to **4096**: Transmit buffer size for the serial port used to communicate with the HUB.
+* **is_coordinator** (Optional, bool) default **false**: Define is this node is a coordinator or not. This will permit the correct initialization of some protocols.
+* **use_starpath** (Optional, bool) default **false**: Enable the new experimental protocol that implement the dynamic network.
 
 ```yaml
 # Example configuration for coordinator node
@@ -64,6 +66,8 @@ meshmesh:
   tx_buffer_size: 4096
   password: !secret meshmesh_password
   channel: 3
+  is_coordinator: true
+  use_starpath: true
 ```
 
 ```yaml
@@ -74,6 +78,7 @@ meshmesh:
   tx_buffer_size: 0
   password: !secret meshmesh_password
   channel: 3
+  use_starpath: true
 ```
 
 ## Packet Transport Platform
@@ -92,7 +97,7 @@ packet_transport:
 
 ```
 
-* **address** (Required, int): The address for the remote node counterpart. Use 0 or UINT32_MAX to broadcast 
+* **address** (Required, **server**, **coordinator**, **broadcast** or int): The address for the destination of the transport packets, use keyword **server** will only receive data, use the keyword **coordinator** to send data to the coordinator in a dynamic network, ise **broadcast** to send data to all neighbors. Default is **coordinator**. 
 * **repeaters** (Optional, list of int) The sequence of repeaters to use to reach the address.
 
 ## Meshmesh Direct
@@ -140,7 +145,7 @@ Configuration variables:
 The ping component check periodically the connection with another node of the network it provide a presence sensor (binary_sensor) and a latency sensor to trigger actions when the network connectivity change.
 
 
-Example config on the pinged device
+Example config #1 passive PONG only device. 
 
 ```yaml
 ping:
@@ -153,7 +158,7 @@ Example config to ping only the coordinator
 ping:
 ```
 
-Example config on the pinger device
+Example config #2 ping device with address 0xC0E5A8 using devices 0x123456 and 0x563412. The device will reply with a PONG using the reverse path.
 
 ```yaml
 ping:
@@ -174,8 +179,29 @@ sensor:
       id: latency
 ```
 
+Example config #3 ping coordinator device. 
+
+> Require starpath protcol to be enabled.
+
+```yaml
+ping:
+  update_interval: 60s
+  address: coordinator
+
+binary_sensor:
+  - platform: ping
+    presence:
+      id: presence
+
+sensor:
+  - platform: ping
+    latency:
+      id: latency
+```
+
+
 Configuration variables:
 
 * **update_interval**  (Optional, Time): The interval between pings. Defaults to 30s.
-* **address** (Optional, server, coordinator or int): The address for the remote node to ping, use keyword server to ping if the device is passive, use the keyword coordinator to ping the coordinator in a dynamic network.
+* **address** (Optional, **server**, **coordinator** or int): The address for the remote node to ping, use keyword **server** to ping if the device is passive, use the keyword **coordinator** to ping the coordinator in a dynamic network. Default is **coordinator**.
 * **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.

@@ -8,7 +8,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ADDRESS
 from esphome.cpp_types import PollingComponent
 
-from .. import MeshmeshComponent, meshmesh_ns
+from .. import MeshmeshComponent, meshmesh_ns, MESH_SPECIAL_ADDRESSES
 
 CONF_MESHMESH_ID = "meshmesh_id"
 CONF_REPEATERS = "repeaters"
@@ -20,7 +20,7 @@ MeshmeshTransport = meshmesh_ns.class_(
 CONFIG_SCHEMA = transport_schema(MeshmeshTransport).extend(
     {
         cv.GenerateID(CONF_MESHMESH_ID): cv.use_id(MeshmeshComponent),
-        cv.Required(CONF_ADDRESS): cv.positive_int,
+        cv.Required(CONF_ADDRESS): cv.Any(cv.enum(MESH_SPECIAL_ADDRESSES), cv.positive_int),
         cv.Optional(CONF_REPEATERS, cv.UNDEFINED): cv.ensure_list(cv.positive_int),
     }
 )

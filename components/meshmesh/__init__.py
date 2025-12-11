@@ -24,6 +24,13 @@ CONF_IS_COORDINATOR = "is_coordinator"
 meshmesh_ns = cg.esphome_ns.namespace("meshmesh")
 MeshmeshComponent = meshmesh_ns.class_("MeshmeshComponent", cg.Component)
 
+MESH_SPECIAL_ADDRESSES = {
+    "broadcast": 2**32 - 1,
+    "coordinator": 2**32 - 2,
+    "invalid": 0,
+    "server": 1,
+}
+
 HARDWARE_UART_TO_UART_SELECTION = {
     UART0: meshmesh_ns.UART_SELECTION_UART0,
     UART1: meshmesh_ns.UART_SELECTION_UART1,

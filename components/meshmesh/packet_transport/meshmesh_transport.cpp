@@ -29,7 +29,7 @@ void MeshmeshTransport::update() {
 
 void MeshmeshTransport::dump_config() {
   ESP_LOGCONFIG(TAG, "MeshmeshTransport");
-  ESP_LOGCONFIG(TAG, "Address: 0x%06X", mTargetAddress);
+  ESP_LOGCONFIG(TAG, "Address: 0x%06X on port %d", mTargetAddress.address, mTargetAddress.port);
 }
 
 void MeshmeshTransport::set_address(uint32_t address) {
