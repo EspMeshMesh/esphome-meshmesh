@@ -2,7 +2,10 @@
 #include "esphome/core/defines.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
+
+#ifdef USE_LOGGER
 #include "esphome/components/logger/logger.h"
+#endif
 
 #ifdef USE_ESP8266
 extern "C" {
@@ -35,7 +38,11 @@ struct MeshmeshSettings {
   uint32_t groups;
 } __attribute__((packed));
 
-class MeshmeshComponent : public Component {
+#ifdef USE_LOGGER
+#define LOG_LISTENER ,logger::LogListener
+#endif
+
+class MeshmeshComponent : public Component LOG_LISTENER {
 public:
   explicit MeshmeshComponent(int baud_rate, int tx_buffer, int rx_buffer);
   espmeshmesh::EspMeshMesh *getNetwork() { return mesh; }
@@ -61,7 +68,7 @@ public:
 private:
   int8_t handleFrame(const uint8_t *data, uint16_t size,const espmeshmesh::MeshAddress &from, int16_t rssi);
 #ifdef USE_LOGGER
-  void sendLog(int level, const char *tag, const char *payload);
+  void on_log(uint8_t level, const char *tag, const char *message, size_t message_len) override;
 #endif
   espmeshmesh::EspMeshMesh *mesh;
 private:

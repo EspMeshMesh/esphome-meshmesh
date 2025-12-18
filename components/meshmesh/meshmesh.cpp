@@ -77,13 +77,6 @@ void MeshmeshComponent::setup() {
     .compileTime = App.get_compilation_time()
   };
 
-#ifdef USE_LOGGER
-  if (logger::global_logger != nullptr) {
-    logger::global_logger->add_on_log_callback(std::bind(&MeshmeshComponent::sendLog, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-  }
-#endif
-
-
   mesh->setup(&config);
   mesh->addHandleFrameCb(std::bind(&MeshmeshComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
 }
@@ -218,14 +211,11 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const e
   return FRAME_NOT_HANDLED;
 }
 
-void MeshmeshComponent::sendLog(int level, const char *tag, const char *payload) {
+void MeshmeshComponent::on_log(uint8_t level, const char *tag, const char *message, size_t message_len) {
   if (!mLogToUart && mPreferences.log_destination == 0)
     return;
 
-  // uint16_t taglen = os_strlen(tag);
-  uint16_t payloadlen = strlen(payload);
-  // uint16_t buffersize = 7+taglen+1+payloadlen;
-  uint16_t buffersize = 7 + payloadlen;
+  uint16_t buffersize = 7 + message_len;
 
   auto buffer = new uint8_t[buffersize];
   auto buffer_ptr = buffer;
@@ -237,16 +227,11 @@ void MeshmeshComponent::sendLog(int level, const char *tag, const char *payload)
   espmeshmesh::uint32toBuffer(buffer_ptr, 0);
   buffer_ptr += 4;
 
-  if (payloadlen > 0)
-    memcpy(buffer_ptr, payload, payloadlen);
+  if (message_len > 0)
+    memcpy(buffer_ptr, message, message_len);
   if (mLogToUart)
     mesh->uartSendData(buffer, buffersize);
   if (mPreferences.log_destination == 1) {
-  /*  if (mesh->broadcast)
-      mesh->broadcast->send(buffer, buffersize);
-  } else if (mPreferences.log_destination > 1) {
-    if (mesh->unicast)
-      mesh->unicast->send(buffer, buffersize, mPreferences.log_destination, UNICAST_DEFAULT_PORT);*/
   }
 
   delete[] buffer;
