@@ -21,12 +21,6 @@ void MeshmeshTransport::setup() {
   if(!mSocket) openSocket();
 }
 
-void MeshmeshTransport::update() {
-  this->updated_ = true;
-  this->resend_data_ = true;
-  PacketTransport::update();
-}
-
 void MeshmeshTransport::dump_config() {
   ESP_LOGCONFIG(TAG, "MeshmeshTransport");
   ESP_LOGCONFIG(TAG, "Address: 0x%06X on port %d", mTargetAddress.address, mTargetAddress.port);

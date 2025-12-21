@@ -17,7 +17,6 @@ namespace meshmesh {
 class MeshmeshTransport : public packet_transport::PacketTransport, public Parented<MeshmeshComponent> {
 public:
   void setup() override;
-  void update() override;
   void dump_config() override;
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
