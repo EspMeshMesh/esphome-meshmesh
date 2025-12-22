@@ -1,7 +1,7 @@
 #include "meshmesh.h"
 #include "commands.h"
-#include <packetbuf.h>
-#include <discovery.h>
+#include "packetbuf.h"
+#include "discovery.h"
 #include <espmeshmesh.h>
 
 #include "esphome/core/application.h"
@@ -12,6 +12,11 @@
 #ifdef USE_LOGGER
 #include "esphome/components/logger/logger.h"
 #endif
+
+extern "C" {
+#include <pb_encode.h>
+#include "nodeinfo.pb.h"
+}
 
 #define MAX_CHANNEL 13
 
@@ -142,6 +147,39 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const e
         rep[0] = CMD_NODE_CONFIG_REP;
         memcpy(rep + 1, &mPreferences, sizeof(MeshmeshSettings));
         mesh->commandReply(rep, sizeof(MeshmeshSettings) + 1);
+        return HANDLE_UART_OK;
+      }
+      break;
+    case CMD_NODE_INFO_REQ:
+      if (size == 1) {
+        std::string platform = "ESP";
+        std::string mac_address = "00:00:00:00:00:00";
+
+        pb_meshmesh_NodeInfo nodeinfo = pb_meshmesh_NodeInfo_init_default;
+        strncpy(nodeinfo.friendly_name, App.get_friendly_name().c_str(), 48);
+        strncpy(nodeinfo.firmware_version, ESPHOME_VERSION, 16);
+        strncpy(nodeinfo.mac_address, mac_address.c_str(), 24);
+        strncpy(nodeinfo.platform, platform.c_str(), 16);
+        strncpy(nodeinfo.board, ESPHOME_BOARD, 32);
+        strncpy(nodeinfo.compile_time, App.get_compilation_time().c_str(), 16);
+        strncpy(nodeinfo.lib_version, mesh->libVersion().c_str(), 16);
+
+        // Calculate the size of the message
+        uint8_t cmdid = pb_meshmesh_NodeInfo_msgid;
+        pb_ostream_t sizestream = {0};
+        pb_write(&sizestream, &cmdid, 1);
+        pb_encode(&sizestream, pb_meshmesh_NodeInfo_fields, &nodeinfo);
+        
+        // Encode the message
+        uint8_t *buffer = new uint8_t[sizestream.bytes_written];
+        pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizestream.bytes_written);
+        pb_write(&stream, &cmdid, 1);
+        pb_encode(&stream, pb_meshmesh_NodeInfo_fields, &nodeinfo);
+        
+        // Encrypt and send the packet
+        mesh->commandReply(buffer, sizestream.bytes_written);
+        delete[] buffer;
+
         return HANDLE_UART_OK;
       }
       break;

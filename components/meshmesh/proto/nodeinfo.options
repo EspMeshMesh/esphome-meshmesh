@@ -1,0 +1,7 @@
+pb_meshmesh.NodeInfo.friendly_name    max_length:48
+pb_meshmesh.NodeInfo.firmware_version max_length:16
+pb_meshmesh.NodeInfo.mac_address      max_length:24
+pb_meshmesh.NodeInfo.platform         max_length:16
+pb_meshmesh.NodeInfo.board            max_length:32
+pb_meshmesh.NodeInfo.compile_time     max_length:16
+pb_meshmesh.NodeInfo.lib_version      max_length:16

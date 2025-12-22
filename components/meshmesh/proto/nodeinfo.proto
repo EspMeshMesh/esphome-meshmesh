@@ -1,0 +1,16 @@
+syntax = "proto3";
+import "nanopb.proto";
+
+package pb_meshmesh;
+
+message NodeInfo {
+  option (nanopb_msgopt).msgid = 0x11;
+
+  string friendly_name = 1;
+  string firmware_version = 2;
+  string mac_address = 3;
+  string platform = 4;
+  string board = 5;
+  string compile_time = 6;
+  string lib_version = 7;
+}
