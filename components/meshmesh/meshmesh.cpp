@@ -183,13 +183,10 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const e
       break;
     case CMD_FIRMWARE_REQ:
       if (size == 1) {
-        size_t size = 1 + strlen(ESPHOME_VERSION) + 1 + App.get_compilation_time().length() + 1;
+        size_t size = 1 + strlen(ESPHOME_VERSION) + 1;
         uint8_t *rep = new uint8_t[size];
         rep[0] = CMD_FIRMWARE_REP;
         strcpy((char *) rep + 1, ESPHOME_VERSION);
-        rep[1 + strlen(ESPHOME_VERSION)] = ' ';
-        strcpy((char *) rep + 1 + strlen(ESPHOME_VERSION) + 1, App.get_compilation_time().c_str());
-        rep[size - 1] = 0;
         mesh->commandReply((const uint8_t *) rep, size);
         delete[] rep;
         return HANDLE_UART_OK;
