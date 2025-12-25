@@ -40,7 +40,7 @@ bool is_connected() {
 
 #ifdef USE_MESH_MESH
   if (meshmesh::global_meshmesh_component != nullptr)
-    return true;
+    return meshmesh::global_meshmesh_component->is_connected();
 #endif
 
 #ifdef USE_WIFI

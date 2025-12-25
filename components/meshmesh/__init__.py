@@ -87,9 +87,8 @@ async def to_code(config):
 
     cg.add_library(
         name="ESPMeshMesh",
-        version="1.4.2",
-        #repository="persuader72/ESPMeshMesh"
-        repository="file:///home/stefano/Sviluppo/Stefano/Meshmesh/workspace/espmeshmesh/"
+        version="1.4.3",
+        repository="persuader72/ESPMeshMesh"
     )
 
     cg.add_library(

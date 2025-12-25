@@ -107,6 +107,16 @@ void MeshmeshComponent::loop() {
   }
 }
 
+void MeshmeshComponent::on_shutdown() {
+  mesh->shutdown();
+}
+
+bool MeshmeshComponent::teardown() {
+  bool teardown_complete = mesh->teardown();
+  if(teardown_complete) mIsConnected = false;
+  return teardown_complete;
+}
+
 int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const espmeshmesh::MeshAddress &from, int16_t rssi) {
   //ESP_LOGD(TAG, "handleFrame: %d, len: %d, from: %d", buf[0], len, from);
   switch (data[0]) {

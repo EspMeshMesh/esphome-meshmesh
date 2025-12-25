@@ -50,6 +50,7 @@ public:
   void setAesPassword(const char *password);
   void setIsCoordinator() { mConfigIsCoordinator = true; }
   void set_uart_selection(UARTSelection uart_selection) { /*FIXME: uart_ = uart_selection;*/}
+  bool is_connected() { return mIsConnected; }
 private:
   void defaultPreferences();
   void preSetupPreferences();
@@ -65,6 +66,8 @@ public:
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::BEFORE_CONNECTION; }
   void loop() override;
+  void on_shutdown() override;
+  bool teardown() override;
 private:
   int8_t handleFrame(const uint8_t *data, uint16_t size,const espmeshmesh::MeshAddress &from, int16_t rssi);
 #ifdef USE_LOGGER
@@ -73,6 +76,7 @@ private:
   espmeshmesh::EspMeshMesh *mesh;
 private:
   bool mLogToUart{false};
+  bool mIsConnected{true};
   bool mRebootRequested{false};
   uint32_t mRebootRequestedTime{0};
 };
