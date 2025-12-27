@@ -82,6 +82,13 @@ void MeshmeshComponent::setup() {
     .compileTime = App.get_compilation_time()
   };
 
+#ifdef USE_LOGGER
+  if (logger::global_logger != nullptr && mLogToUart) {
+    logger::global_logger->add_log_listener(this);
+  }
+#endif
+
+
   mesh->setup(&config);
   mesh->addHandleFrameCb(std::bind(&MeshmeshComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
 }
