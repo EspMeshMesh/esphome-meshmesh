@@ -72,27 +72,33 @@ class MeshmeshRawImpl : public Socket {
     }
 
     auto *addr4 = reinterpret_cast<const sockaddr_in *>(name);
-    in_port_t port = ntohs(addr4->sin_port);
+    mPort = ntohs(addr4->sin_port);
 
-    // ip_addr_t ip;
-    // ip.u_addr.ip4 = addr4->sin_addr.s_addr;
-    // ESP_LOGD(TAG, "MeshmeshRawImpl::bind(ip=%u port=%u)", ip.addr, port);
+    ESP_LOGD(TAG, "MeshmeshRawImpl::bind(port=%u)", mPort);
     mConnectedPath->bindPort(
         [](void *s, uint32_t from, uint16_t handle) { ((MeshmeshRawImpl *) s)->onNewClient(from, handle); }, this,
-        port);
+        mPort);
 
     return 0;
   }
 
   int close() override {
-    ESP_LOGD(TAG, "MeshmeshRawImpl::close");
-    mConnectedPath->closeConnection(mFrom, mHandle);
+    ESP_LOGD(TAG, "MeshmeshRawImpl::close port %u from %ld handle %d", mPort, mFrom, mHandle);
+    if(mServer) {
+      mConnectedPath->unbindPort(mPort);
+    } else {
+      mConnectedPath->closeConnection(mFrom, mHandle);
+    }
     return 0;
   }
 
   int shutdown(int how) override {
-    ESP_LOGD(TAG, "MeshmeshRawImpl::shutdown");
-    mConnectedPath->closeConnection(mFrom, mHandle);
+    ESP_LOGD(TAG, "MeshmeshRawImpl::shutdown from %ld handle %d", mPort, mFrom, mHandle);
+    if(mServer) {
+      mConnectedPath->unbindPort(mPort);
+    } else {
+      mConnectedPath->closeConnection(mFrom, mHandle);
+    }
     return 0;
   }
 
@@ -237,6 +243,7 @@ class MeshmeshRawImpl : public Socket {
 
   uint32_t mFrom{0};
   uint16_t mHandle{0};
+  in_port_t mPort{0};
   bool mServer{false};
   bool mActive{true};
   espmeshmesh::ConnectedPath *mConnectedPath{nullptr};
