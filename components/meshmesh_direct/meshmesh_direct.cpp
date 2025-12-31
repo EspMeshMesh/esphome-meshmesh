@@ -172,7 +172,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
         if (index < App.get_sensors().size()) {
           auto sensor = App.get_sensors()[index];
           hash = sensor->get_object_id_hash() & 0xFFFF;
-          info = sensor->get_name() + "," + sensor->get_object_id() + "," + sensor->get_unit_of_measurement();
+          info = sensor->get_name() + "," + sensor->get_object_id() + "," + sensor->get_unit_of_measurement_ref();
           hashfound = true;
         }
 #endif
@@ -457,7 +457,7 @@ sensor::Sensor *MeshMeshDirectComponent::findSensorByUnit(const std::string &uni
   auto sensors = App.get_sensors();
   for (auto sensor : sensors) {
     result = sensor;
-    if (unit == sensor->get_unit_of_measurement()) {
+    if (unit == sensor->get_unit_of_measurement_ref()) {
       result = sensor;
       break;
     }
