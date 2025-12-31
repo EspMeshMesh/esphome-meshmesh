@@ -18,6 +18,7 @@ typedef struct _pb_meshmesh_NodeInfo {
     char board[33];
     char compile_time[17];
     char lib_version[17];
+    int32_t node_type;
 } pb_meshmesh_NodeInfo;
 
 
@@ -26,8 +27,8 @@ extern "C" {
 #endif
 
 /* Initializer values for message structs */
-#define pb_meshmesh_NodeInfo_init_default        {"", "", "", "", "", "", ""}
-#define pb_meshmesh_NodeInfo_init_zero           {"", "", "", "", "", "", ""}
+#define pb_meshmesh_NodeInfo_init_default        {"", "", "", "", "", "", "", 0}
+#define pb_meshmesh_NodeInfo_init_zero           {"", "", "", "", "", "", "", 0}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define pb_meshmesh_NodeInfo_friendly_name_tag   1
@@ -37,6 +38,7 @@ extern "C" {
 #define pb_meshmesh_NodeInfo_board_tag           5
 #define pb_meshmesh_NodeInfo_compile_time_tag    6
 #define pb_meshmesh_NodeInfo_lib_version_tag     7
+#define pb_meshmesh_NodeInfo_node_type_tag       8
 
 /* Struct field encoding specification for nanopb */
 #define pb_meshmesh_NodeInfo_FIELDLIST(X, a) \
@@ -46,7 +48,8 @@ X(a, STATIC,   SINGULAR, STRING,   mac_address,       3) \
 X(a, STATIC,   SINGULAR, STRING,   platform,          4) \
 X(a, STATIC,   SINGULAR, STRING,   board,             5) \
 X(a, STATIC,   SINGULAR, STRING,   compile_time,      6) \
-X(a, STATIC,   SINGULAR, STRING,   lib_version,       7)
+X(a, STATIC,   SINGULAR, STRING,   lib_version,       7) \
+X(a, STATIC,   SINGULAR, INT32,    node_type,         8)
 #define pb_meshmesh_NodeInfo_CALLBACK NULL
 #define pb_meshmesh_NodeInfo_DEFAULT NULL
 
@@ -57,13 +60,13 @@ extern const pb_msgdesc_t pb_meshmesh_NodeInfo_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define PB_MESHMESH_NODEINFO_PB_H_MAX_SIZE       pb_meshmesh_NodeInfo_size
-#define pb_meshmesh_NodeInfo_size                182
+#define pb_meshmesh_NodeInfo_size                193
 
 /* Message IDs (where set with "msgid" option) */
 #define PB_MSG_17 pb_meshmesh_NodeInfo
 
 #define NODEINFO_MESSAGES \
-	PB_MSG(17,182,pb_meshmesh_NodeInfo) \
+	PB_MSG(17,193,pb_meshmesh_NodeInfo) \
 
 #define pb_meshmesh_NodeInfo_msgid 17
 

@@ -7,3 +7,6 @@
 #endif
 
 PB_BIND(pb_meshmesh_NodeInfo, pb_meshmesh_NodeInfo, AUTO)
+
+
+

@@ -73,11 +73,15 @@ void MeshmeshComponent::pre_setup() {
 }
 
 void MeshmeshComponent::setup() {
-  espmeshmesh::EspMeshMeshSetupConfig config = {
+#ifdef USE_DEEP_SLEEP
+  // Force node type to edge ignoring the preferences if deep sleep is enabled
+  mConfigNodeType = espmeshmesh::EspMeshMesh::ESPMESH_NODE_TYPE_EDGE;
+#endif
+  espmeshmesh::EspMeshMesh::SetupConfig config = {
     .hostname = App.get_name(),
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
-    .isCoordinator = mConfigIsCoordinator,
+    .nodeType = (espmeshmesh::EspMeshMesh::NodeType)mConfigNodeType,
     .fwVersion = ESPHOME_VERSION,
     .compileTime = App.get_compilation_time()
   };
@@ -95,7 +99,7 @@ void MeshmeshComponent::setup() {
 
 void MeshmeshComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Meshmesh");
-  ESP_LOGCONFIG(TAG, "Is Coordinator: %d", mConfigIsCoordinator);
+  ESP_LOGCONFIG(TAG, "Node Type: %d", mConfigNodeType);
 #ifdef USE_ESP32
   ESP_LOGCONFIG(TAG, "Sys cip ID: %08lX", espmeshmesh::Discovery::chipId());
 #else
@@ -180,6 +184,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const e
         strncpy(nodeinfo.board, ESPHOME_BOARD, 32);
         strncpy(nodeinfo.compile_time, App.get_compilation_time().c_str(), 16);
         strncpy(nodeinfo.lib_version, mesh->libVersion().c_str(), 16);
+        nodeinfo.node_type = mConfigNodeType;
 
         // Calculate the size of the message
         uint8_t cmdid = pb_meshmesh_NodeInfo_msgid;

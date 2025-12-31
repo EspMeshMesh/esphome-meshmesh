@@ -13,4 +13,5 @@ message NodeInfo {
   string board = 5;
   string compile_time = 6;
   string lib_version = 7;
+  int32 node_type = 8;
 }
