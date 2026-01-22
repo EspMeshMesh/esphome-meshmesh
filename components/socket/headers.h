@@ -3,6 +3,8 @@
 
 // Helper file to include all socket-related system headers (or use our own
 // definitions where system ones don't exist)
+
+// Meshmesh implementation
 #ifdef USE_SOCKET_IMPL_MESHMESH_8266
 #include "lwip/inet.h"
 #include <cerrno>

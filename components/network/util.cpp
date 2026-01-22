@@ -109,6 +109,12 @@ std::string get_use_address() {
   if (wifi::global_wifi_component != nullptr)
     return wifi::global_wifi_component->get_use_address();
 #endif
+
+
+#ifdef USE_MESH_MESH
+  if (meshmesh::global_meshmesh_component != nullptr)
+    return std::string("*");
+#endif
   return "";
 }
 

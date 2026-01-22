@@ -122,17 +122,7 @@ class MeshmeshRawImpl : public Socket {
     return 0;
   }
 
-  std::string getpeername() override {
-    char buffer[24];
-    uint32_t ip4 = mFrom;
-    snprintf(buffer, sizeof(buffer), "%d.%d.%d.%d", (uint8_t) ((ip4 >> 24) & 0xFF), (uint8_t) ((ip4 >> 16) & 0xFF),
-             (uint8_t) ((ip4 >> 8) & 0xFF), (uint8_t) ((ip4 >> 0) & 0xFF));
-    return std::string(buffer);
-  }
-
   int getsockname(struct sockaddr *name, socklen_t *addrlen) override { return 0; }
-
-  std::string getsockname() override { return std::string("*"); }
 
   int getsockopt(int level, int optname, void *optval, socklen_t *optlen) override {
     ESP_LOGD(TAG, "MeshmeshRawImpl::getsockopt(level=%d,optname=%d)", level, optname);
@@ -187,6 +177,11 @@ class MeshmeshRawImpl : public Socket {
         break;
     }
     return ret;
+  }
+
+  ssize_t recvfrom(void *buf, size_t len, sockaddr *addr, socklen_t *addr_len) final {
+    errno = ENOTSUP;
+    return -1;
   }
 
   ssize_t write(const void *buf, size_t len) override {

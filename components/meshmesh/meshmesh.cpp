@@ -77,13 +77,15 @@ void MeshmeshComponent::setup() {
   // Force node type to edge ignoring the preferences if deep sleep is enabled
   mConfigNodeType = espmeshmesh::EspMeshMesh::ESPMESH_NODE_TYPE_EDGE;
 #endif
+  char build_time_str[Application::BUILD_TIME_STR_SIZE];
+  App.get_build_time_string(build_time_str);
   espmeshmesh::EspMeshMesh::SetupConfig config = {
     .hostname = App.get_name(),
     .channel = mPreferences.channel == UINT8_MAX ? mConfigChannel : mPreferences.channel,
     .txPower = mPreferences.txPower,
     .nodeType = (espmeshmesh::EspMeshMesh::NodeType)mConfigNodeType,
     .fwVersion = ESPHOME_VERSION,
-    .compileTime = App.get_compilation_time()
+    .compileTime = build_time_str
   };
 
 #ifdef USE_LOGGER
@@ -176,13 +178,16 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const e
         std::string platform = "ESP";
         std::string mac_address = "00:00:00:00:00:00";
 
+        char build_time_str[Application::BUILD_TIME_STR_SIZE];
+        App.get_build_time_string(build_time_str);
+
         pb_meshmesh_NodeInfo nodeinfo = pb_meshmesh_NodeInfo_init_default;
         strncpy(nodeinfo.friendly_name, App.get_friendly_name().c_str(), 48);
         strncpy(nodeinfo.firmware_version, ESPHOME_VERSION, 16);
         strncpy(nodeinfo.mac_address, mac_address.c_str(), 24);
         strncpy(nodeinfo.platform, platform.c_str(), 16);
         strncpy(nodeinfo.board, ESPHOME_BOARD, 32);
-        strncpy(nodeinfo.compile_time, App.get_compilation_time().c_str(), 48);
+        strncpy(nodeinfo.compile_time, build_time_str, 48);
         strncpy(nodeinfo.lib_version, mesh->libVersion().c_str(), 16);
         nodeinfo.node_type = mConfigNodeType;
 

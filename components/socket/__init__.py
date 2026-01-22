@@ -10,6 +10,7 @@ CONF_IMPLEMENTATION = "implementation"
 IMPLEMENTATION_LWIP_TCP = "lwip_tcp"
 IMPLEMENTATION_LWIP_SOCKETS = "lwip_sockets"
 IMPLEMENTATION_BSD_SOCKETS = "bsd_sockets"
+# Meshmesh implementation
 IMPLEMENTATION_MESHMESH_8266 = "meshmesh_esp8266"
 IMPLEMENTATION_MESHMESH_ESP32 = "meshmesh_esp32"
 
@@ -49,6 +50,8 @@ def require_wake_loop_threadsafe() -> None:
     This enables the shared UDP loopback socket mechanism (~208 bytes RAM).
     The socket is shared across all components that use this feature.
 
+    This call is a no-op if networking is not enabled in the configuration.
+
     IMPORTANT: This is for background thread context only, NOT ISR context.
     Socket operations are not safe to call from ISR handlers.
 
@@ -59,7 +62,9 @@ def require_wake_loop_threadsafe() -> None:
             socket.require_wake_loop_threadsafe()
     """
     # Only set up once (idempotent - multiple components can call this)
-    if not CORE.data.get(KEY_WAKE_LOOP_THREADSAFE_REQUIRED, False):
+    if CORE.has_networking and not CORE.data.get(
+        KEY_WAKE_LOOP_THREADSAFE_REQUIRED, False
+    ):
         CORE.data[KEY_WAKE_LOOP_THREADSAFE_REQUIRED] = True
         cg.add_define("USE_WAKE_LOOP_THREADSAFE")
         # Consume 1 socket for the shared wake notification socket
@@ -80,6 +85,7 @@ CONFIG_SCHEMA = cv.Schema(
             IMPLEMENTATION_LWIP_TCP,
             IMPLEMENTATION_LWIP_SOCKETS,
             IMPLEMENTATION_BSD_SOCKETS,
+            # Meshmesh implementation
             IMPLEMENTATION_MESHMESH_8266,
             IMPLEMENTATION_MESHMESH_ESP32,
             lower=True,
@@ -99,6 +105,7 @@ async def to_code(config):
     elif impl == IMPLEMENTATION_BSD_SOCKETS:
         cg.add_define("USE_SOCKET_IMPL_BSD_SOCKETS")
         cg.add_define("USE_SOCKET_SELECT_SUPPORT")
+    # Meshmesh implementation
     elif impl == IMPLEMENTATION_MESHMESH_8266:
         cg.add_define("USE_SOCKET_IMPL_MESHMESH_8266")
     elif impl == IMPLEMENTATION_MESHMESH_ESP32:
@@ -117,6 +124,7 @@ def FILTER_SOURCE_FILES() -> list[str]:
         excluded.append("bsd_sockets_impl.cpp")
     if impl != IMPLEMENTATION_LWIP_SOCKETS:
         excluded.append("lwip_sockets_impl.cpp")
+    # Meshmesh implementation
     if impl not in (IMPLEMENTATION_MESHMESH_8266, IMPLEMENTATION_MESHMESH_ESP32):
         excluded.append("meshmesh_raw_tcp_impl.cpp")
     return excluded

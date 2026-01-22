@@ -46,17 +46,17 @@ void MeshMeshDirectComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Setting up MeshMeshDirectComponent");
   #ifdef USE_SENSOR
   for (auto sensor : App.get_sensors()) {
-    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08X", sensor->get_object_id().c_str(), sensor->get_object_id_hash());
+    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08X", sensor->get_name().c_str(), sensor->get_object_id_hash());
   }
 #endif
 #ifdef USE_BINARY_SENSOR
   for (auto sensor : App.get_binary_sensors()) {
-    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08X", sensor->get_object_id().c_str(), sensor->get_object_id_hash());
+    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08X", sensor->get_name().c_str(), sensor->get_object_id_hash());
   }
 #endif
 #ifdef USE_SWITCH
   for (auto switch_ : App.get_switches()) {
-    ESP_LOGCONFIG(TAG, "Found switch %s with hash %08X", switch_->get_object_id().c_str(), switch_->get_object_id_hash());
+    ESP_LOGCONFIG(TAG, "Found switch %s with hash %08X", switch_->get_name().c_str(), switch_->get_object_id_hash());
   }
 #endif
 }
@@ -172,7 +172,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
         if (index < App.get_sensors().size()) {
           auto sensor = App.get_sensors()[index];
           hash = sensor->get_object_id_hash() & 0xFFFF;
-          info = sensor->get_name() + "," + sensor->get_object_id() + "," + sensor->get_unit_of_measurement_ref();
+          info = sensor->get_name() + "," + sensor->get_name() + "," + sensor->get_unit_of_measurement_ref();
           hashfound = true;
         }
 #endif
@@ -192,7 +192,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
         if (index < App.get_switches().size()) {
           auto switch_ = App.get_switches()[index];
           hash = switch_->get_object_id_hash() & 0xFFFF;
-          info = switch_->get_name() + "," + switch_->get_object_id();
+          info = switch_->get_name();
           hashfound = true;
         }
 #endif
@@ -202,7 +202,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
         if (index < App.get_lights().size()) {
           auto light = App.get_lights()[index];
           hash = light->get_object_id_hash() & 0xFFFF;
-          info = light->get_name() + "," + light->get_object_id();
+          info = light->get_name();
           hashfound = true;
         }
 #endif
@@ -212,7 +212,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
         if (index < App.get_text_sensors().size()) {
           auto texts = App.get_text_sensors()[index];
           hash = texts->get_object_id_hash() & 0xFFFF;
-          info = texts->get_name() + "," + texts->get_object_id();
+          info = texts->get_name();
           hashfound = true;
         }
 #endif
