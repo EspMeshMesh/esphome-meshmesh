@@ -182,7 +182,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
         if (index < App.get_binary_sensors().size()) {
           auto binary = App.get_binary_sensors()[index];
           hash = binary->get_object_id_hash() & 0xFFFF;
-          info = binary->get_name() + "," + binary->get_object_id();
+          info = binary->get_name();
           hashfound = true;
         }
 #endif

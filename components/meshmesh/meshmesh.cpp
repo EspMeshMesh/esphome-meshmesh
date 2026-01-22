@@ -106,7 +106,6 @@ void MeshmeshComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Sys cip ID: %08lX", espmeshmesh::Discovery::chipId());
 #else
   ESP_LOGCONFIG(TAG, "Sys cip ID: %08X", system_get_chip_id());
-  ESP_LOGCONFIG(TAG, "Curr. Channel: %d Saved Channel: %d", wifi_get_channel(), mPreferences.channel);
 #endif
 }
 
@@ -187,7 +186,7 @@ int8_t MeshmeshComponent::handleFrame(const uint8_t *data, uint16_t size,const e
         strncpy(nodeinfo.mac_address, mac_address.c_str(), 24);
         strncpy(nodeinfo.platform, platform.c_str(), 16);
         strncpy(nodeinfo.board, ESPHOME_BOARD, 32);
-        strncpy(nodeinfo.compile_time, build_time_str, 48);
+        strncpy(nodeinfo.compile_time, build_time_str, sizeof(nodeinfo.compile_time)-1);
         strncpy(nodeinfo.lib_version, mesh->libVersion().c_str(), 16);
         nodeinfo.node_type = mConfigNodeType;
 
