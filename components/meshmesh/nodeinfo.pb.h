@@ -16,7 +16,7 @@ typedef struct _pb_meshmesh_NodeInfo {
     char mac_address[25];
     char platform[17];
     char board[33];
-    char compile_time[49];
+    char compile_time[29];
     char lib_version[17];
     int32_t node_type;
 } pb_meshmesh_NodeInfo;
@@ -60,13 +60,13 @@ extern const pb_msgdesc_t pb_meshmesh_NodeInfo_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define PB_MESHMESH_NODEINFO_PB_H_MAX_SIZE       pb_meshmesh_NodeInfo_size
-#define pb_meshmesh_NodeInfo_size                225
+#define pb_meshmesh_NodeInfo_size                205
 
 /* Message IDs (where set with "msgid" option) */
 #define PB_MSG_17 pb_meshmesh_NodeInfo
 
 #define NODEINFO_MESSAGES \
-	PB_MSG(17,225,pb_meshmesh_NodeInfo) \
+	PB_MSG(17,205,pb_meshmesh_NodeInfo) \
 
 #define pb_meshmesh_NodeInfo_msgid 17
 
