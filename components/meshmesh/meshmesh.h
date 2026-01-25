@@ -48,7 +48,7 @@ public:
   espmeshmesh::EspMeshMesh *getNetwork() { return mesh; }
   void setChannel(int channel) { mConfigChannel = channel; }
   void setAesPassword(const char *password);
-  void setIsCoordinator() { mConfigIsCoordinator = true; }
+  bool isCoordinator() const;
   void setNodeType(int node_type) { mConfigNodeType = node_type; }
   void set_uart_selection(UARTSelection uart_selection) { /*FIXME: uart_ = uart_selection;*/}
   bool is_connected() { return mIsConnected; }
@@ -60,7 +60,6 @@ private:
   MeshmeshSettings mPreferences;
 private:
   uint8_t mConfigChannel;
-  bool mConfigIsCoordinator{false};
   int mConfigNodeType{0};
 public:
   void pre_setup();

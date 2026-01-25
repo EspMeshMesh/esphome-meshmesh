@@ -44,6 +44,10 @@ MeshmeshComponent::MeshmeshComponent(int baud_rate, int tx_buffer, int rx_buffer
   mesh->setLogCb(logPrintfCb);
 }
 
+bool MeshmeshComponent::isCoordinator() const {
+  return mesh->isCoordinator();
+}
+
 void MeshmeshComponent::setAesPassword(const char *password) {
   this->mesh->setAesPassword(password);
 }

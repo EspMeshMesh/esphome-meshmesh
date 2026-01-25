@@ -2,12 +2,13 @@
 
 #include <esphome/core/hal.h>
 #include <esphome/core/log.h>
+#include <esphome/components/meshmesh/meshmesh.h>
 
 #include <functional>
 #include <string.h>
 
-#include <espmeshmesh.h>
 #include <meshsocket.h>
+#include <meshaddress.h>
 
 namespace esphome {
 namespace meshmesh {
@@ -21,7 +22,11 @@ PingComponent::PingComponent() {
 }
 
 void PingComponent::setup() {
-    ESP_LOGI(TAG, "PingComponent setup to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
+    MeshmeshComponent *mesh = global_meshmesh_component;
+    // If the target address is the coordinator address and the node is a coordinator, act as a Server
+    if(mTargetAddress.address == espmeshmesh::MeshAddress::coordinatorAddress && mesh->isCoordinator()) {
+        mTargetAddress.address = 1; // Act as a Server
+    }
     if(!mSocket) openSocket();
 }
 
@@ -29,6 +34,9 @@ void PingComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "PingComponent");
     ESP_LOGCONFIG(TAG, "Target Address: %06X", mTargetAddress.address);
     ESP_LOGCONFIG(TAG, "Repeaters: %d", mTargetAddress.repeaters.size());
+    for(uint32_t repeater : mTargetAddress.repeaters) {
+        ESP_LOGCONFIG(TAG, "Repeater: %06X", repeater);
+    }
     ESP_LOGCONFIG(TAG, "Log level: %d", ESPHOME_LOG_LEVEL);
 #ifdef USE_BINARY_SENSOR
     ESP_LOGCONFIG(TAG, "Binary sensor: %s", mPresenceSensor!=nullptr ? "true" : "false");
@@ -48,12 +56,12 @@ void PingComponent::loop() {
             mPresenceSensor->publish_state(false);
         }
 #endif
-        ESP_LOGV(TAG, "PingComponent loop timeout");
     }
 }
 
 void PingComponent::update() {
-    if(mTargetAddress.address <= 1) return;
+    // Addresses 0 and 1 are reserved for the invalid address and the server address.
+    if(mTargetAddress.address <= espmeshmesh::MeshAddress::noAddress+1) return;
     ESP_LOGV(TAG, "PingComponent update send to %06X on port %d", mTargetAddress.address, mTargetAddress.port);
     uint8_t pkt[] = { static_cast<uint8_t>(PingPacket::PING), 'P', 'I', 'N', 'G' };
     mLastPingTime = millis();
@@ -87,12 +95,10 @@ void PingComponent::openSocket() {
 
 void PingComponent::set_target_address(uint32_t target_address) {
     mTargetAddress.address = target_address;
-    ESP_LOGI(TAG, "PingComponent set_target_address: 0x%06X", mTargetAddress.address);
 }
 
 void PingComponent::set_repeaters(const std::vector<uint32_t> &value) {
     mTargetAddress.repeaters = value;
-    ESP_LOGI(TAG, "PingComponent set_repeaters: %d", mTargetAddress.repeaters.size());
 }
 
 void PingComponent::recvDatagram(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from, int16_t rssi) {
