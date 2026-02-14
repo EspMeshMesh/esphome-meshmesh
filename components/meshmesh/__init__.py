@@ -104,7 +104,7 @@ async def to_code(config):
 
     cg.add_library(
         name="ESPMeshMesh",
-        version="1.5.0",
+        version="1.5.1",
         repository="persuader72/ESPMeshMesh"
     )
 
