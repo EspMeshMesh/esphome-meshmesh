@@ -1,6 +1,10 @@
-# [ESPMeshMesh Network](https://www.espmeshmesh.org/) components
+# [ESPMeshMesh](https://www.espmeshmesh.org/) ESPHome external components
 
 ESPMeshMesh is an implementation of a protocol for mesh communication of [ESPHome](https://esphome.io/) nodes that works on ESP8266- and ESP32-based boards and can be integrated with a Home Assistant instance. The protocol is based on the **802.11B** frame format and is compatible with the radio equipment of chips such as **ESP32** and **ESP8266**.
+
+## Example
+
+- [Standalone No Hub](examples/01_standalone_no_hub/esp32/remote_switch/README.md)
 
 ## Using as External Component
 
