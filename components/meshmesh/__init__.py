@@ -102,12 +102,7 @@ async def to_code(config):
     if CORE.is_esp8266:
         cg.add_library("ESP8266WiFi", None)
 
-    #cg.add_library("ESPMeshMesh", "1.5.2")
-    cg.add_library(
-        name="ESPMeshMesh",
-        version="1.5.2",
-        repository="file:///home/stefano/Sviluppo/Stefano/Meshmesh/workspace/espmeshmesh2/"
-    )
+    cg.add_library("ESPMeshMesh", "1.5.2")
 
     cg.add_library(
         name="Nanopb",
