@@ -25,9 +25,16 @@ class MeshmeshRawImpl : public Socket {
  public:
   MeshmeshRawImpl(uint32_t from, uint16_t handle, bool server) : mFrom(from), mHandle(handle), mServer(server) {
     ESP_LOGD(TAG, "MeshmeshRawImpl::MeshmeshRawImpl from %ld handle %d", from, handle);
+    if(!meshmesh::global_meshmesh_component || !meshmesh::global_meshmesh_component->getNetwork()) {
+      ESP_LOGE(TAG, "MeshmeshRawImpl::MeshmeshRawImpl: Meshmesh component not found");
+      return;
+    }
     mConnectedPath = meshmesh::global_meshmesh_component->getNetwork()->getConnectedPath();
     if (!mServer) {
-      mConnectedPath->setReceiveCallback(
+      if(mConnectedPath == nullptr) {
+        ESP_LOGE(TAG, "MeshmeshRawImpl::MeshmeshRawImpl: No connected path found");
+      } else {
+        mConnectedPath->setReceiveCallback(
           [](void *arg, const uint8_t *data, uint16_t size, uint8_t connid) {
             auto a_this = (MeshmeshRawImpl *) arg;
             a_this->onRecv(data, size);
@@ -37,6 +44,7 @@ class MeshmeshRawImpl : public Socket {
             a_this->onDisconnect();
           },
           this, from, handle);
+      }
     }
   }
 
@@ -65,6 +73,11 @@ class MeshmeshRawImpl : public Socket {
 
   int bind(const struct sockaddr *name, socklen_t addrlen) override {
     ESP_LOGD(TAG, "MeshmeshRawImpl::bind");
+    if(!mConnectedPath) {
+      ESP_LOGE(TAG, "MeshmeshRawImpl::bind: No connected path found");
+      errno = EINVAL;
+      return -1;
+    }
     auto family = name->sa_family;
     if (family != AF_INET) {
       errno = EINVAL;
