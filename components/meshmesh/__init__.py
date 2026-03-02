@@ -12,6 +12,7 @@ from esphome.const import (
     CONF_TX_BUFFER_SIZE,
 )
 from esphome.core import CORE, coroutine_with_priority
+from esphome.coroutine import CoroPriority
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ CONFIG_SCHEMA = cv.Schema(
 ).extend(cv.COMPONENT_SCHEMA)
 
 
-@coroutine_with_priority(40.0)
+@coroutine_with_priority(CoroPriority.COMMUNICATION)
 async def to_code(config):
     cg.add_define("USE_MESH_MESH")
 
