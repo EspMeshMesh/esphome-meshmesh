@@ -33,15 +33,6 @@ void MeshMeshDirectComponent::setup() {
   }
 }
 
-void MeshMeshDirectComponent::broadcastSend(const uint8_t cmd, const uint8_t *data, const uint16_t len) {
-  uint8_t *buff = new uint8_t[len+2];
-  buff[0] = CMD_ENTITY_REQ;
-  buff[1] = cmd;
-  memcpy(buff+2, data, len);
-  mSocket->sendDatagram(buff, len+2, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, espmeshmesh::MeshAddress::broadCastAddress), nullptr);
-  delete buff;
-}
-
 void MeshMeshDirectComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Setting up MeshMeshDirectComponent");
   #ifdef USE_SENSOR
@@ -59,6 +50,19 @@ void MeshMeshDirectComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "Found switch %s with hash %08X", switch_->get_name().c_str(), switch_->get_object_id_hash());
   }
 #endif
+}
+
+void MeshMeshDirectComponent::broadcastSend(const uint8_t cmd, const uint8_t *data, const uint16_t len) {
+  uint8_t *buff = new uint8_t[len+2];
+  buff[0] = CMD_ENTITY_REQ;
+  buff[1] = cmd;
+  memcpy(buff+2, data, len);
+  if(mSocket) {
+    mSocket->sendDatagram(buff, len+2, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, espmeshmesh::MeshAddress::broadCastAddress), nullptr);
+  } else {
+    ESP_LOGE(TAG, "Setup not completed, Socket not opened");
+  }
+  delete buff;
 }
 
 void MeshMeshDirectComponent::broadcastSendCustom(const uint8_t *data, const uint16_t len) {
