@@ -110,7 +110,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_VERSION, default=2): cv.one_of(1, 2, int=True),
             cv.SplitDefault(
                 CONF_PORT,
-                esp8266=8266,
+                esp8266=3232,
                 esp32=3232,
                 rp2040=2040,
                 bk72xx=8892,
