@@ -104,11 +104,17 @@ async def to_code(config):
         cg.add_library("ESP8266WiFi", None)
 
     cg.add_library("ESPMeshMesh", "1.6.1")
-    #cg.add_library(
-    #    name="ESPMeshMesh",
-    #    version="1.6.1",
-    #    repository="file://" + os.environ["ESPMESHMESH_PATH"]
-    #)
+    # --> Uncomment this section and comment the line above to use a local copy of the espmeshmesh library
+    # remember to set the ESPMESHMESH_PATH environment variable to the path of the local copy of the 
+    # espmeshmesh library
+    #
+    # import os
+    # cg.add_library(
+    #     name="ESPMeshMesh",
+    #     version="1.6.1",
+    #     repository="file://" + os.environ["ESPMESHMESH_PATH"]
+    # )
+    # <-- End of local copy of the espmeshmesh library sections
 
     cg.add_library(
         name="Nanopb",
