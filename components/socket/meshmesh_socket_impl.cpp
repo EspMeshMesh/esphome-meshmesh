@@ -2,7 +2,7 @@
 #include "esphome/core/helpers.h"
 #include "socket.h"
 
-#if defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#if defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 
 #include <cstring>
 #include "esphome/core/application.h"
@@ -292,4 +292,4 @@ std::unique_ptr<Socket> socket_loop_monitored(int domain, int type, int protocol
 
 }  // namespace esphome::socket
 
-#endif  // USE_SOCKET_IMPL_BSD_SOCKETS
+#endif  // USE_SOCKET_IMPL_BSD_SOCKETS || USE_SOCKET_IMPL_MESHMESH_ESP8266

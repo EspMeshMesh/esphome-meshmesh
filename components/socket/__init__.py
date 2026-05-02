@@ -16,7 +16,7 @@ IMPLEMENTATION_LWIP_TCP = "lwip_tcp"
 IMPLEMENTATION_LWIP_SOCKETS = "lwip_sockets"
 IMPLEMENTATION_BSD_SOCKETS = "bsd_sockets"
 # --> Meshmesh implementation
-IMPLEMENTATION_MESHMESH_8266 = "meshmesh_esp8266"
+IMPLEMENTATION_MESHMESH_ESP8266 = "meshmesh_esp8266"
 IMPLEMENTATION_MESHMESH_ESP32 = "meshmesh_esp32"
 # <-- End Meshmesh implementation
 
@@ -158,7 +158,7 @@ CONFIG_SCHEMA = cv.Schema(
             IMPLEMENTATION_LWIP_SOCKETS,
             IMPLEMENTATION_BSD_SOCKETS,
             # --> Meshmesh implementation
-            IMPLEMENTATION_MESHMESH_8266,
+            IMPLEMENTATION_MESHMESH_ESP8266,
             IMPLEMENTATION_MESHMESH_ESP32,
             # <-- End Meshmesh implementation
             lower=True,
@@ -177,15 +177,18 @@ async def to_code(config):
     elif impl == IMPLEMENTATION_BSD_SOCKETS:
         cg.add_define("USE_SOCKET_IMPL_BSD_SOCKETS")
     # --> Meshmesh implementation
-    elif impl == IMPLEMENTATION_MESHMESH_8266:
-        cg.add_define("USE_SOCKET_IMPL_MESHMESH_8266")
+    elif impl == IMPLEMENTATION_MESHMESH_ESP8266:
+        cg.add_define("USE_SOCKET_IMPL_MESHMESH_ESP8266")
+        cg.add_build_flag("-DLWIP_SOCKET=1")
     elif impl == IMPLEMENTATION_MESHMESH_ESP32:
         cg.add_define("USE_SOCKET_IMPL_MESHMESH_ESP32")
     # <-- End Meshmesh implementation
     # ESP32 and LibreTiny both have LwIP >= 2.1.3 with lwip_socket_dbg_get_socket()
     # and FreeRTOS task notifications — enable fast select to bypass lwip_select().
     # Only when not using lwip_tcp, which does not provide select() support.
-    if impl != IMPLEMENTATION_MESHMESH_8266 and impl != IMPLEMENTATION_MESHMESH_ESP32:
+    # --> Meshmesh implementation
+    if impl != IMPLEMENTATION_MESHMESH_ESP8266 and impl != IMPLEMENTATION_MESHMESH_ESP32:
+    # <-- End Meshmesh implementation
         if (CORE.is_esp32 or CORE.is_libretiny) and impl != IMPLEMENTATION_LWIP_TCP:
             cg.add_build_flag("-DUSE_LWIP_FAST_SELECT")
 
@@ -202,10 +205,10 @@ def FILTER_SOURCE_FILES() -> list[str]:
         excluded.append("bsd_sockets_impl.cpp")
     if impl != IMPLEMENTATION_LWIP_SOCKETS:
         excluded.append("lwip_sockets_impl.cpp")
-    if impl != IMPLEMENTATION_MESHMESH_8266:
+    if impl != IMPLEMENTATION_MESHMESH_ESP8266:
         excluded.append("meshmesh_raw_tcp_impl.cpp")
     # Start Meshmesh implementation -->
-    if impl != IMPLEMENTATION_MESHMESH_ESP32 and impl != IMPLEMENTATION_MESHMESH_8266:
+    if impl != IMPLEMENTATION_MESHMESH_ESP32 and impl != IMPLEMENTATION_MESHMESH_ESP8266:
         excluded.append("meshmesh_socket_impl.cpp")
     # <-- End Meshmesh implementation
     return excluded

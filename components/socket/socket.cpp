@@ -1,5 +1,5 @@
 #include "socket.h"
-#if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 #include <cerrno>
 #include <cstring>
 #include <string>
@@ -15,7 +15,7 @@ bool socket_ready_fd(int fd, bool loop_monitored) { return !loop_monitored || Ap
 #endif
 
 // Start Meshmesh implementation -->
-#if defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_8266)
+#if defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 // Shared ready() implementation for Meshmesh socket implementations.
 // Checks if the Application's select() loop has marked this fd as ready.
 bool socket_ready_fd(int fd, bool loop_monitored) { return !loop_monitored || false; } // TODO: Implement Meshmesh ready()
@@ -48,7 +48,12 @@ static inline const char *esphome_inet_ntop6(const void *addr, char *buf, size_t
 #else
 // BSD sockets (host, ESP32-IDF)
 static inline const char *esphome_inet_ntop4(const void *addr, char *buf, size_t size) {
+  // FIXME: This is a temporary workaround to avoid the use of inet_ntop on ESP8266.
+#ifdef USE_ESP8266
+  return "127.0.0.1";
+#else
   return inet_ntop(AF_INET, addr, buf, size);
+#endif
 }
 #if USE_NETWORK_IPV6
 static inline const char *esphome_inet_ntop6(const void *addr, char *buf, size_t size) {
@@ -121,7 +126,7 @@ socklen_t set_sockaddr(struct sockaddr *addr, socklen_t addrlen, const char *ip_
     server->sin6_family = AF_INET6;
     server->sin6_port = htons(port);
 
-#if defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#if defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
     // Use standard inet_pton for BSD sockets
     if (inet_pton(AF_INET6, ip_address, &server->sin6_addr) != 1) {
       errno = EINVAL;

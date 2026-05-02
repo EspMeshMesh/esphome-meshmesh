@@ -1,7 +1,7 @@
 #pragma once
 #include "esphome/core/defines.h"
 
-#if defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#if defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 
 #include <memory>
 #include <span>
@@ -76,4 +76,4 @@ private:
 
 }  // namespace esphome::socket
 
-#endif  // USE_SOCKET_IMPL_MESHMESH_ESP32
+#endif  // USE_SOCKET_IMPL_MESHMESH_ESP32 || USE_SOCKET_IMPL_MESHMESH_ESP8266

@@ -11,7 +11,7 @@
 #endif
 
 // Start Meshmesh implementation -->
-#if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 // <-- End Meshmesh implementation 
 
 // Include only the active implementation's header.
@@ -23,7 +23,7 @@
 #elif defined(USE_SOCKET_IMPL_LWIP_TCP)
 #include "lwip_raw_tcp_impl.h"
 // Start Meshmesh implementation -->
-#elif defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#elif defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 #include "meshmesh_socket_impl.h"
 // <-- End Meshmesh implementation -->
 #endif
@@ -45,7 +45,7 @@ using ListenSocket = LwIPSocketImpl;
 using Socket = LWIPRawImpl;
 using ListenSocket = LWIPRawListenImpl;
 // Start Meshmesh implementation -->
-#elif defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#elif defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 using Socket = MeshMeshSocketImpl;
 using ListenSocket = MeshMeshSocketImpl;
 // <-- End Meshmesh implementation -->
@@ -69,7 +69,7 @@ bool socket_ready_fd(int fd, bool loop_monitored);
 // Inline ready() — defined here because it depends on socket_ready/socket_ready_fd
 // declared above, while the impl headers are included before those declarations.
 // Start Meshmesh implementation -->
-#if defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+#if defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 // <-- End Meshmesh implementation -->
 inline bool Socket::ready() const {
 #ifdef USE_LWIP_FAST_SELECT
