@@ -45,15 +45,23 @@ static inline const char *esphome_inet_ntop6(const void *addr, char *buf, size_t
   return lwip_inet_ntop(AF_INET6, addr, buf, size);
 }
 #endif
+#elif defined(USE_SOCKET_IMPL_MESHMESH_ESP8266) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
+static inline const char *esphome_inet_ntop4(const void *addr, char *buf, size_t size) {
+  if (size < 24) {
+    errno = EINVAL;
+    return nullptr;
+  }
+
+  uint32_t ip4 = *(uint32_t *)addr;
+  snprintf(buf, size, "%d.%d.%d.%d", (uint8_t) ((ip4 >> 24) & 0xFF), (uint8_t) ((ip4 >> 16) & 0xFF),
+           (uint8_t) ((ip4 >> 8) & 0xFF), (uint8_t) ((ip4 >> 0) & 0xFF));
+  return buf;
+}
 #else
 // BSD sockets (host, ESP32-IDF)
 static inline const char *esphome_inet_ntop4(const void *addr, char *buf, size_t size) {
   // FIXME: This is a temporary workaround to avoid the use of inet_ntop on ESP8266.
-#ifdef USE_ESP8266
-  return "127.0.0.1";
-#else
   return inet_ntop(AF_INET, addr, buf, size);
-#endif
 }
 #if USE_NETWORK_IPV6
 static inline const char *esphome_inet_ntop6(const void *addr, char *buf, size_t size) {
