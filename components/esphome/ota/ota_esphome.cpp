@@ -340,7 +340,7 @@ void ESPHomeOTAComponent::handle_data_() {
       const int err = errno;
       if (this->would_block_(err)) {
         // read() already waited up to SO_RCVTIMEO for data, just feed WDT
-        App.feed_wdt();
+        this->yield_and_feed_watchdog_();
         continue;
       }
       ESP_LOGW(TAG, "Read err %d", err);
@@ -455,6 +455,9 @@ bool ESPHomeOTAComponent::readall_(uint8_t *buf, size_t len) {
       at += read;
     }
     // read() already waited via SO_RCVTIMEO, just yield without 1ms stall
+    #ifdef USE_MESH_MESH
+    meshmesh::global_meshmesh_component->loop();
+    #endif  
     App.feed_wdt();
     delay(0);
   }
@@ -484,6 +487,9 @@ bool ESPHomeOTAComponent::writeall_(const uint8_t *buf, size_t len) {
       at += written;
       // write() may block up to SO_SNDTIMEO on BSD/lwip sockets, feed WDT
       App.feed_wdt();
+      #ifdef USE_MESH_MESH
+      meshmesh::global_meshmesh_component->loop();
+      #endif  
     }
   }
   return true;
@@ -585,11 +591,20 @@ void ESPHomeOTAComponent::cleanup_connection_() {
 }
 
 void ESPHomeOTAComponent::yield_and_feed_watchdog_() {
-  #ifdef USE_MESH_MESH
+#ifdef USE_MESH_MESH
   meshmesh::global_meshmesh_component->loop();
 #endif
   App.feed_wdt();
+
+#ifdef USE_MESH_MESH
+#ifdef USE_ESP8266
+  delay(5);
+#else // USE_ESP8266
   delay(1);
+#endif // USE_ESP8266
+#else 
+  delay(1);
+#endif
 }
 
 #ifdef USE_OTA_PASSWORD
