@@ -38,11 +38,7 @@ struct MeshmeshSettings {
   uint32_t groups;
 } __attribute__((packed));
 
-#ifdef USE_LOGGER
-#define LOG_LISTENER ,logger::LogListener
-#endif
-
-class MeshmeshComponent : public Component LOG_LISTENER {
+class MeshmeshComponent : public Component {
 public:
   explicit MeshmeshComponent(int baud_rate, int tx_buffer, int rx_buffer);
   espmeshmesh::EspMeshMesh *getNetwork() { return mesh; }
@@ -72,7 +68,7 @@ public:
 private:
   int8_t handleFrame(const uint8_t *data, uint16_t size,const espmeshmesh::MeshAddress &from, int16_t rssi);
 #ifdef USE_LOGGER
-  void on_log(uint8_t level, const char *tag, const char *message, size_t message_len) override;
+  void on_log(uint8_t level, const char *tag, const char *message, size_t message_len);
 #endif
   espmeshmesh::EspMeshMesh *mesh;
 private:
