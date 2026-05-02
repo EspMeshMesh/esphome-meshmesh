@@ -455,11 +455,7 @@ bool ESPHomeOTAComponent::readall_(uint8_t *buf, size_t len) {
       at += read;
     }
     // read() already waited via SO_RCVTIMEO, just yield without 1ms stall
-    #ifdef USE_MESH_MESH
-    meshmesh::global_meshmesh_component->loop();
-    #endif  
-    App.feed_wdt();
-    delay(0);
+    this->yield_and_feed_watchdog_();
   }
 
   return true;
@@ -486,10 +482,7 @@ bool ESPHomeOTAComponent::writeall_(const uint8_t *buf, size_t len) {
     } else {
       at += written;
       // write() may block up to SO_SNDTIMEO on BSD/lwip sockets, feed WDT
-      App.feed_wdt();
-      #ifdef USE_MESH_MESH
-      meshmesh::global_meshmesh_component->loop();
-      #endif  
+      this->yield_and_feed_watchdog_();
     }
   }
   return true;
