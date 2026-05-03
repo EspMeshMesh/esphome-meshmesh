@@ -5,6 +5,7 @@ ESPMeshMesh is an implementation of a protocol for mesh communication of [ESPHom
 ## Example
 
 - [Standalone No Hub](examples/01_standalone_no_hub/esp32/remote_switch/README.md)
+- [Polite broadcast](examples/02_polite_broadcast/mesh_direct/README.md)
 
 ## Using as External Component
 
