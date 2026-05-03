@@ -75,7 +75,11 @@ void MeshMeshDirectComponent::unicastSend(const uint8_t cmd, const uint8_t *data
   buff[1] = cmd;
   memcpy(buff+2, data, len);
   if(mSocket) {
-    mSocket->sendDatagram(buff, len+2, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, addr), nullptr);
+    auto sent = mSocket->sendDatagram(buff, len+2, espmeshmesh::MeshAddress(MESHMESH_DIRECT_PORT, addr), nullptr);
+    ESP_LOGD(TAG, "unicastSend sent: %d", sent);
+    if(sent < 0) {
+      ESP_LOGE(TAG, "unicastSend error: %s", espmeshmesh::MeshSocket::error2string((espmeshmesh::MeshSocket::ErrorCodes)sent));
+    } 
   } else {
     ESP_LOGE(TAG, "Setup not completed, Socket not opened");
   }
