@@ -33,6 +33,7 @@ MeshmeshComponent = meshmesh_ns.class_("MeshmeshComponent", cg.Component)
 MESH_SPECIAL_ADDRESSES = {
     "broadcast": 2**32 - 1,
     "coordinator": 2**32 - 2,
+    "polite_broadcast": 2**32 - 3,
     "invalid": 0,
     "server": 1,
 }
@@ -51,6 +52,7 @@ HARDWARE_UART_TO_UART_SELECTION = {
 }
 
 CONF_USE_STARPATH = "use_starpath"
+CONF_USE_POLITE_BROADCAST_PROTOCOL = "use_polite_broadcast"
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -64,6 +66,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Required(CONF_CHANNEL): cv.positive_int,
         cv.Required(CONF_PASSWORD): cv.string,
         cv.Optional(CONF_USE_STARPATH, default=False): cv.boolean,
+        cv.Optional(CONF_USE_POLITE_BROADCAST_PROTOCOL, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -74,6 +77,8 @@ async def to_code(config):
 
     if CONF_USE_STARPATH in config and config[CONF_USE_STARPATH]:
         cg.add_build_flag("-DESPMESH_STARPATH_ENABLED")
+    if CONF_USE_POLITE_BROADCAST_PROTOCOL in config and config[CONF_USE_POLITE_BROADCAST_PROTOCOL]:
+        cg.add_build_flag("-DUSE_POLITE_BROADCAST_PROTOCOL")
 
     if CORE.is_esp8266:
         cg.add_build_flag("-Wl,-wrap=ppEnqueueRxq")
@@ -103,17 +108,17 @@ async def to_code(config):
     if CORE.is_esp8266:
         cg.add_library("ESP8266WiFi", None)
 
-    cg.add_library("ESPMeshMesh", "1.6.1")
+    #cg.add_library("ESPMeshMesh", "1.6.1")
     # --> Uncomment this section and comment the line above to use a local copy of the espmeshmesh library
     # remember to set the ESPMESHMESH_PATH environment variable to the path of the local copy of the 
     # espmeshmesh library
     #
-    # import os
-    # cg.add_library(
-    #     name="ESPMeshMesh",
-    #     version="1.6.1",
-    #     repository="file://" + os.environ["ESPMESHMESH_PATH"]
-    # )
+    import os
+    cg.add_library(
+        name="ESPMeshMesh",
+        version="1.6.1",
+        repository="file://" + os.environ["ESPMESHMESH_PATH"]
+    )
     # <-- End of local copy of the espmeshmesh library sections
 
     cg.add_library(
