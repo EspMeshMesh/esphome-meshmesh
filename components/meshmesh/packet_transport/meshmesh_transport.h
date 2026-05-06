@@ -21,9 +21,9 @@ public:
 
   float get_setup_priority() const override { return setup_priority::AFTER_WIFI; }
 
+  void set_prefered_protocol(uint8_t protocol);
   void set_address(uint32_t address);
   void set_repeaters(const std::vector<uint32_t> &repeaters);
-
 protected:
   void send_packet(const std::vector<uint8_t> &buf) const override;
   size_t get_max_packet_size() override { return 999; }

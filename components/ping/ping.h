@@ -30,6 +30,7 @@ public:
   virtual void loop() override;
   virtual void update() override;
 
+  void set_prefered_protocol(uint8_t protocol);
   void set_target_address(uint32_t target_address);
   void set_repeaters(const std::vector<uint32_t> &value);
 #ifdef USE_BINARY_SENSOR

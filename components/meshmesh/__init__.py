@@ -3,6 +3,7 @@ import logging
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import (
+    CONF_ADDRESS,
     CONF_BAUD_RATE,
     CONF_CHANNEL,
     CONF_HARDWARE_UART,
@@ -24,11 +25,20 @@ UART1 = "UART1"
 UART2 = "UART2"
 DEFAULT = "DEFAULT"
 
+CONF_MESH_ADDRESS = "mesh_address"
 CONF_IS_COORDINATOR = "is_coordinator"
 CONF_NODE_TYPE = "node_type"
+CONF_REPEATERS = "repeaters"
+CONF_COORDINATOR_ADDRESS = "coordinator"
+CONF_PROTOCOL = "protocol"
 
 meshmesh_ns = cg.esphome_ns.namespace("meshmesh")
 MeshmeshComponent = meshmesh_ns.class_("MeshmeshComponent", cg.Component)
+
+MESH_PROTOCOL = {
+    "none": 0,
+    "polite_broadcast": 5,
+}
 
 MESH_SPECIAL_ADDRESSES = {
     "broadcast": 2**32 - 1,
@@ -53,6 +63,14 @@ HARDWARE_UART_TO_UART_SELECTION = {
 
 CONF_USE_STARPATH = "use_starpath"
 CONF_USE_POLITE_BROADCAST_PROTOCOL = "use_polite_broadcast"
+
+MESH_ADDRESS_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_ADDRESS, default=CONF_COORDINATOR_ADDRESS): cv.Any(cv.enum(MESH_SPECIAL_ADDRESSES), cv.positive_int),
+        cv.Optional(CONF_REPEATERS, cv.UNDEFINED): cv.ensure_list(cv.positive_int),
+        cv.Optional(CONF_PROTOCOL, default="none"): cv.enum(MESH_PROTOCOL),
+    }
+)
 
 CONFIG_SCHEMA = cv.Schema(
     {

@@ -93,6 +93,10 @@ void PingComponent::openSocket() {
     }
 }
 
+void PingComponent::set_prefered_protocol(uint8_t protocol) {
+    mTargetAddress.sourceProtocol = static_cast<espmeshmesh::MeshAddress::DataSrc>(protocol);
+}
+
 void PingComponent::set_target_address(uint32_t target_address) {
     mTargetAddress.address = target_address;
 }

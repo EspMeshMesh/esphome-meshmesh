@@ -1,15 +1,20 @@
-# [ESPMeshMesh](https://www.espmeshmesh.org/) ESPHome external components
+---
+title: "ESPMeshMesh External Components"
+description: "Mesh networking external components for ESPHome on ESP8266 and ESP32 devices."
+---
 
-ESPMeshMesh is an implementation of a protocol for mesh communication of [ESPHome](https://esphome.io/) nodes that works on ESP8266- and ESP32-based boards and can be integrated with a Home Assistant instance. The protocol is based on the **802.11B** frame format and is compatible with the radio equipment of chips such as **ESP32** and **ESP8266**.
+ESPMeshMesh provides mesh communication for [ESPHome](https://esphome.io/) nodes on ESP8266 and ESP32 hardware.
+It supports direct node-to-node communication and integration with Home Assistant.
 
-## Example
+## Example Projects
 
 - [Standalone No Hub](examples/01_standalone_no_hub/esp32/remote_switch/README.md)
-- [Polite broadcast](examples/02_polite_broadcast/mesh_direct/README.md)
+- [Polite Broadcast](examples/02_polite_broadcast/mesh_direct/README.md)
 
-## Using as External Component
+## External Components Setup
 
-The component can be imported in existing configuration as an [external component](https://esphome.io/components/external_components/). In order to make the network work, some other bundled components must be overridden. 
+Use the [External Components](/components/external_components/) feature to load this repository in your ESPHome
+configuration. This repository also overrides bundled components used by networking and socket layers.
 
 ```yaml
 external_components:
@@ -19,23 +24,29 @@ external_components:
 
 ## Socket Component Override
 
-The ESPHome socket bundled component must be overridden to make the network compatible with API and OTA components.
+Override the bundled `socket` implementation to make API and OTA compatible with ESPMeshMesh.
 
 ```yaml
 socket:
   implementation: meshmesh_esp8266
 ```
 
-* **implementation** (Required, string): The socket implementation compatible with the mesh network architecture. Must be set to **meshmesh_esp8266** or **meshmesh_esp32** depending on the CPU architecture.
+```yaml
+socket:
+  implementation: meshmesh_esp32
+```
+
+- **implementation** (**Required**, string): Socket backend for the target architecture. Use
+  `meshmesh_esp8266` on ESP8266 and `meshmesh_esp32` on ESP32.
 
 ## Meshmesh Component
 
-This component allows ESPHome to communicate with other ESPHome devices using a mesh protocol based on the 802.11B frame. This network is compatible with both ESP8266 and ESP32 devices.
+The `meshmesh` component enables packet exchange between ESPHome devices using an IEEE 802.11b frame-based mesh
+transport.
 
-### Example Configuration
+### Configuration
 
 ```yaml
-# Example configuration 
 meshmesh:
   channel: 3
   password: !secret meshmesh_password
@@ -43,137 +54,133 @@ meshmesh:
 
 ### Configuration Variables
 
-* **channel** (Required, int): The Wi-Fi channel that ESPMeshMesh will use to send/receive data packets. 
-* **password** (Required, string): The AES shared secret used to encrypt all packets on the network.
-* **hardware_uart** (Optional, int) defaults to **0**: UART number used by the base node (coordinator) to communicate with the HUB (meshmeshgo).
-* **baud_rate** (Optional, int) defaults to **460800**: Baud rate of the serial port used to communicate with the HUB.
-* **rx_buffer_size** (Optional, int) defaults to **2048**: Receive buffer size for the serial port used to communicate with the HUB.
-* **tx_buffer_size** (Optional, int) defaults to **4096**: Transmit buffer size for the serial port used to communicate with the HUB.
-* **is_coordinator** (Optional, bool) defaults to **false**: Defines whether this node is a coordinator or not. This will permit the correct initialization of some protocols.
-* **use_starpath** (Optional, bool) defaults to **false**: Enables the new experimental protocol that implements the dynamic network.
-* **node_type** (Optional, enum): One of **backbone** (default), **coordinator** or **edge**. Change the behavior of the node based on its function. Look at the next section for a detailed explanation.
+- **channel** (**Required**, int): Wi-Fi channel used for mesh packet transmission.
+- **password** (**Required**, string): Shared AES key used to encrypt mesh packets.
+- **hardware_uart** (*Optional*, int): UART index used by the coordinator to connect to the hub. Defaults to `0`.
+- **baud_rate** (*Optional*, int): Serial baud rate for hub communication. Defaults to `460800`.
+- **rx_buffer_size** (*Optional*, int): UART receive buffer size. Defaults to `2048`.
+- **tx_buffer_size** (*Optional*, int): UART transmit buffer size. Defaults to `4096`.
+- **is_coordinator** (*Optional*, bool): Marks this node as coordinator. Defaults to `false`.
+- **use_starpath** (*Optional*, bool): Enables the experimental dynamic-network protocol. Defaults to `false`.
+- **node_type** (*Optional*, enum): One of `backbone`, `coordinator`, or `edge`. Defaults to `backbone`.
 
 ### Node Types
 
-- **backbone**: A standard optional node powered by a stable source that can be used as a network backbone node to route packets from other nodes.
-- **coordinator**: The root of the network, the node attached to the HUB through the serial connection. There must be only one coordinator on the network.
-- **edge**: Low power or battery powered nodes that are sleeping most of the time. These nodes are not used to route packets from other nodes.
+- **backbone**: Mains-powered routing node used to extend network coverage.
+- **coordinator**: Root node connected to the hub through serial.
+- **edge**: Low-power endpoint that does not route packets for other nodes.
 
-### Simple Example
+### Examples
 
-#### Coordinator Node
+#### Coordinator
 
 ```yaml
 meshmesh:
-  baud_rate: 460800
-  rx_buffer_size: 2048
-  tx_buffer_size: 4096
   password: !secret meshmesh_password
   channel: 3
   is_coordinator: true
-  use_starpath: true
 ```
 
-#### Generic Network Node
+#### Generic Node
 
 ```yaml
 meshmesh:
-  baud_rate: 0
-  rx_buffer_size: 0
-  tx_buffer_size: 0
   password: !secret meshmesh_password
   channel: 3
-  use_starpath: true
 ```
+
+## Mesh Address Schema
+
+`mesh_address` identifies a destination in the mesh network and can be reused by multiple components.
+
+```yaml
+component_name:
+  mesh_address:
+    protocol: none
+    address: 0x112233
+    repeaters:
+      - 0x123456
+      - 0x563412
+```
+
+- **protocol** (*Optional*, `none` | `polite_broadcast`): Overrides protocol selection. Defaults to `none`.
+- **address** (**Required**, `server` | `coordinator` | `broadcast` | int): Destination node selector.
+- **repeaters** (*Optional*, list of int): Ordered repeater path for routed delivery.
+
+Use `polite_broadcast` with a specific `address` to target one node using polite broadcast delivery, or with
+`broadcast` to target all nodes.
 
 ## Packet Transport Platform
 
-The [Packet Transport Component](https://esphome.io/components/packet_transport) platform allows ESPHome nodes to directly communicate with each other over a communication channel. This implementation uses ESPMeshMesh as a communication medium. See the [Packet Transport Component](https://esphome.io/components/packet_transport) and [Meshmesh Component](#meshmesh-component) for more information.
+The [Packet Transport](/components/packet_transport/) component can use ESPMeshMesh as a transport backend.
+See also the `meshmesh` component in this document.
 
-### Example Configuration
+### Configuration
 
 ```yaml
-# Example configuration entry for packet transport over ESPMeshMesh.
 packet_transport:
-  platform: meshmesh
-  update_interval: 5s
-  address: 0x112233
-  repeaters:
-    - 0x123456
-    - 0x563412
-
+  - platform: meshmesh
+    mesh_address:
+      address: 0x112233
 ```
 
 ### Configuration Variables
 
-* **address** (Required, **server**, **coordinator**, **broadcast** or int): The address for the destination of the transport packets. Use keyword **server** to only receive data, use the keyword **coordinator** to send data to the coordinator in a dynamic network, use **broadcast** to send data to all neighbors. Default is **coordinator**.
-* **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.
-* All other options from the [Packet Transport Component](https://esphome.io/components/packet_transport/)
+- **mesh_address** (**Required**, schema): Destination address schema. See [Mesh Address Schema](#mesh-address-schema).
+- **All other options** (*Optional*): Inherited from [Packet Transport](/components/packet_transport/).
 
-### Simple Example
+### Examples
 
-Let's consider a node with id 0x112233 as provider and a node with id 0xB56EC4 as consumer.
-
-#### Provider Node Configuration
+#### Provider Node
 
 ```yaml
 packet_transport:
   - platform: meshmesh
-    update_interval: 5s
-    address: 0xB56EC4
+    mesh_address:
+      address: 0xB56EC4
     sensors:
       - uptime_sensor
-
-sensor:
-  - platform: uptime
-    name: "Uptime"
-    id: uptime_sensor
 ```
 
-#### Consumer Node Configuration
+#### Consumer Node
 
 ```yaml
 packet_transport:
   - platform: meshmesh
-    update_interval: 5s
-    address: 0x112233
+    mesh_address:
+      address: 0x112233
     providers:
-      - name: prov-temp-sensor
-
-sensor:
-  - platform: packet_transport
-    internal: false
-    name: Remote Uptime
-    provider: prov-temp-sensor
-    id: remote_uptime_sensor
-    remote_id: uptime_sensor
+      - name: prov-uptime
 ```
 
 ## Meshmesh Direct
 
-This component provides direct communication capabilities for sending and receiving data packets over the ESPMeshMesh network.
+The `meshmesh_direct` component sends and receives arbitrary data frames over ESPMeshMesh.
+
+### Configuration
 
 ```yaml
-# Example configuration for meshmesh_direct
 meshmesh_direct:
 ```
 
 ### Automations
 
-* **on_receive** (Optional, automation): Automation to trigger when data is received from the mesh network.
+- **on_receive** (*Optional*, automation): Triggered when a packet is received.
 
 ### Actions
 
-* **meshmesh.send**: This is an action for sending a data packet over the ESPMeshMesh protocol.
+- **meshmesh.send**: Sends a data packet over ESPMeshMesh.
 
-### Configuration Variables
+### Action Variables
 
-* **address** (Required, int): Target of the transmission. This can be obtained from the last three bytes of the MAC address.
-* **data** (Required, string): Data to transmit to the remote node.
+- **address** (**Required**, int): Destination node address.
+- **data** (**Required**, string): Payload to transmit.
 
 ## Meshmesh Direct Switch
 
-This is a virtual switch component that can be used to control a remote physical switch present on the remote node.
+The `meshmesh_direct` switch platform controls a physical switch exposed by a remote node.
+
+### Configuration
 
 ```yaml
 switch:
@@ -185,34 +192,31 @@ switch:
 
 ### Configuration Variables
 
-* **address** (Required, int): The address for the remote node that contains the switch.
-* **target** (Required, int): The hash value of the physical switch on the remote node.
-* **id** (Optional, string): Manually specify the ID for code generation. At least one of id and name must be specified.
-* **name** (Optional, string): The name of the switch. At least one of id and name must be specified.
-
+- **address** (**Required**, int): Address of the remote node containing the switch.
+- **target** (**Required**, int): Hash identifier of the remote switch entity.
+- **id** (*Optional*, string): Manually set the generated ID. At least one of `id` and `name` is required.
+- **name** (*Optional*, string): Entity display name. At least one of `id` and `name` is required.
 
 ## Ping Component
 
-The ping component checks periodically the connection with another node of the network. It provides a presence sensor (binary_sensor) and a latency sensor to trigger actions when the network connectivity changes.
+The `ping` component periodically checks reachability of another mesh node and exposes presence and latency data.
 
-### Example Configuration
+### Configurations
 
-#### Example #1: Passive PONG Only Device
+#### Passive PONG-Only Device
 
 ```yaml
 ping:
   address: server
 ```
 
-#### Example #2: Ping Only the Coordinator
+#### Ping Coordinator
 
 ```yaml
 ping:
 ```
 
-#### Example #3: Ping Device with Specific Address and Repeaters
-
-Ping device with address 0xC0E5A8 using devices 0x123456 and 0x563412 as repeaters. The device will reply with a PONG using the reverse path.
+#### Ping Specific Node Through Repeaters
 
 ```yaml
 ping:
@@ -221,40 +225,20 @@ ping:
   repeaters:
     - 0x123456
     - 0x563412
-
-binary_sensor:
-  - platform: ping
-    presence:
-      id: presence
-
-sensor:
-  - platform: ping
-    latency:
-      id: latency
 ```
 
-#### Example #4: Ping Coordinator Device
+#### Ping Coordinator (Starpath)
 
-> Requires starpath protocol to be enabled.
+> [!IMPORTANT]
+> Requires `use_starpath: true` in the `meshmesh` component.
 
 ```yaml
 ping:
   update_interval: 60s
   address: coordinator
-
-binary_sensor:
-  - platform: ping
-    presence:
-      id: presence
-
-sensor:
-  - platform: ping
-    latency:
-      id: latency
 ```
 
 ### Configuration Variables
 
-* **update_interval** (Optional, Time): The interval between pings. Defaults to 30s.
-* **address** (Optional, **server**, **coordinator** or int): The address for the remote node to ping. Use keyword **server** if the device is passive (only responds to pings), use the keyword **coordinator** to ping the coordinator in a dynamic network. Default is **coordinator**.
-* **repeaters** (Optional, list of int): The sequence of repeaters to use to reach the address.
+- **update_interval** (*Optional*, Time): Interval between pings. Defaults to `30s`.
+- **mesh_address** (**Required**, schema): Destination address schema. See [Mesh Address Schema](#mesh-address-schema).

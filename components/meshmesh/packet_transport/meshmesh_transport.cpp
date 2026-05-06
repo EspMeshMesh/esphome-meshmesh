@@ -17,6 +17,7 @@ static const char *const TAG = "meshmesh_transport";
 static const uint8_t PACKET_TRANSPORT_PORT = 0xA2;
 
 void MeshmeshTransport::setup() {
+  mTargetAddress.port = PACKET_TRANSPORT_PORT;
   PacketTransport::setup();
   if(!mSocket) openSocket();
 }
@@ -26,21 +27,16 @@ void MeshmeshTransport::dump_config() {
   ESP_LOGCONFIG(TAG, "Address: 0x%06X on port %d", mTargetAddress.address, mTargetAddress.port);
 }
 
+void MeshmeshTransport::set_prefered_protocol(uint8_t protocol) {
+  mTargetAddress.sourceProtocol = static_cast<espmeshmesh::MeshAddress::DataSrc>(protocol);
+}
+
 void MeshmeshTransport::set_address(uint32_t address) {
-  mTargetAddress.port = PACKET_TRANSPORT_PORT;
   mTargetAddress.address = address == 0 ? espmeshmesh::MeshAddress::broadCastAddress : address;
-  if(mSocket != nullptr) {
-    delete mSocket;
-    openSocket();
-  }
 }
 
 void MeshmeshTransport::set_repeaters(const std::vector<uint32_t> &repeaters) {
   mTargetAddress.repeaters = repeaters;
-  if(mSocket != nullptr) {
-    delete mSocket;
-    openSocket();
-  }
 }
 
 void MeshmeshTransport::send_packet(const std::vector<uint8_t> &buf) const {
