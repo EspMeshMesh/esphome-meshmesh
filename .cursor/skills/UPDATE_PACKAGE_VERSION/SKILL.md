@@ -1,3 +1,17 @@
+---
+name: esppmeshmesh-update
+description: Procedure update the version of espmeshmesh library platformio registry
+---
+
+# Platformio Registry Update
+
+Detailed instructions for the agent.
+
+## When to use 
+
+- Use this skill when user ask you to update the version of the espmeshmesh library
+- This skill describe the full procedure to update the version of the espmeshmesh library
+
 # Procedure to update and publish new espmeshmesh library dependency
 
 ## Procedure
