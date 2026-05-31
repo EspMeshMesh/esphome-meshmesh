@@ -97,7 +97,14 @@ async def to_code(config):
         cg.add_build_flag("-DESPMESH_STARPATH_ENABLED")
     if CONF_USE_POLITE_BROADCAST_PROTOCOL in config and config[CONF_USE_POLITE_BROADCAST_PROTOCOL]:
         cg.add_build_flag("-DUSE_POLITE_BROADCAST_PROTOCOL")
-
+    if config[CONF_NODE_TYPE] == "coordinator":
+        cg.add_build_flag("-DESPMESH_RECV_DUP_TABLE_SIZE=0x40")
+    else:
+        cg.add_build_flag("-DESPMESH_RECV_DUP_TABLE_SIZE=0x10")
+    if config[CONF_NODE_TYPE] == "coordinator":
+        cg.add_build_flag("-DESPMESH_CONNPATH_MAX_CONNECTIONS=0x40")
+    else:
+        cg.add_build_flag("-DESPMESH_CONNPATH_MAX_CONNECTIONS=0x10")
     if CORE.is_esp8266:
         cg.add_build_flag("-Wl,-wrap=ppEnqueueRxq")
 
@@ -126,17 +133,17 @@ async def to_code(config):
     if CORE.is_esp8266:
         cg.add_library("ESP8266WiFi", None)
 
-    cg.add_library("ESPMeshMesh", "1.6.5")
+    cg.add_library("ESPMeshMesh", "1.6.6")
     # --> Uncomment this section and comment the line above to use a local copy of the espmeshmesh library
     # remember to set the ESPMESHMESH_PATH environment variable to the path of the local copy of the
     # espmeshmesh library
     #
-    # import os
-    # cg.add_library(
-    #     name="ESPMeshMesh",
-    #     version="1.6.3",
-    #     repository="file://" + os.environ["ESPMESHMESH_PATH"]
-    # )
+    #import os
+    #cg.add_library(
+    #    name="ESPMeshMesh",
+    #    version="1.6.3",
+    #    repository="file://" + os.environ["ESPMESHMESH_PATH"]
+    #)
     # <-- End of local copy of the espmeshmesh library sections
 
     cg.add_library(
