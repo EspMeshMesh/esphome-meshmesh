@@ -92,13 +92,14 @@ void MeshmeshComponent::setup() {
     .compileTime = build_time_str
   };
 
-  if (logger::global_logger != nullptr)
+#ifdef USE_LOGGER
+  if (logger::global_logger != nullptr) {
     logger::global_logger->add_log_callback(
-      this, [](void *self, uint8_t level, const char *tag, const char *message, size_t message_len) {
-        static_cast<MeshmeshComponent *>(self)->on_log(level, tag, message, message_len);
-      }
-  );
-
+        this, [](void *self, uint8_t level, const char *tag, const char *message, size_t message_len) {
+          static_cast<MeshmeshComponent *>(self)->on_log(level, tag, message, message_len);
+        });
+  }
+#endif
 
   mesh->setup(&config);
   mesh->addHandleFrameCb(std::bind(&MeshmeshComponent::handleFrame, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
