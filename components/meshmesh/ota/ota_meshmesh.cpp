@@ -1,90 +1,65 @@
-/*
-This file is a patched version of the ota_esphome.cpp file from the ESPHome project.
-*/
-
 #include "ota_meshmesh.h"
+
 #ifdef USE_OTA
-#include "esphome/components/md5/md5.h"
-#include "esphome/components/network/util.h"
+
+#ifdef USE_OTA_PASSWORD
+#include "esphome/components/sha256/sha256.h"
+#endif
+
 #include "esphome/components/ota/ota_backend.h"
-#include "esphome/components/ota/ota_backend_arduino_esp32.h"
-#include "esphome/components/ota/ota_backend_arduino_esp8266.h"
+#include "esphome/components/ota/ota_backend_esp8266.h"
 #include "esphome/components/ota/ota_backend_arduino_libretiny.h"
 #include "esphome/components/ota/ota_backend_arduino_rp2040.h"
 #include "esphome/components/ota/ota_backend_esp_idf.h"
-#include "esphome/components/meshmesh/meshmesh.h"
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include "esphome/core/util.h"
 
 #include <espmeshmesh.h>
+#include <meshsocket.h>
 
-#include <cerrno>
-#include <cstdio>
+#include <cstring>
+#include <functional>
 
 namespace esphome {
 namespace meshmesh {
 
-static const char *const TAG = "meshmesh.ota";
+static const char *const TAG = "meshmesh_ota";
+static constexpr uint16_t MESHMESH_OTA_PORT = 0xA5;
 static constexpr uint16_t OTA_BLOCK_SIZE = 8192;
-static constexpr uint32_t OTA_SOCKET_TIMEOUT_HANDSHAKE = 10000;  // milliseconds for initial handshake
-static constexpr uint32_t OTA_SOCKET_TIMEOUT_DATA = 90000;       // milliseconds for data transfer
+static constexpr size_t OTA_BUFFER_SIZE = 1024;
+static constexpr uint32_t OTA_TIMEOUT_HANDSHAKE_MS = 20000;
+static constexpr uint32_t OTA_TIMEOUT_DATA_MS = 90000;
 
-void MeshmeshOTAComponent::setup() {
-#ifdef USE_OTA_STATE_CALLBACK
-  ota::register_ota_platform(this);
-#endif
+static const uint8_t FEATURE_SUPPORTS_COMPRESSION = 0x01;
+static const uint8_t FEATURE_SUPPORTS_SHA256_AUTH = 0x02;
 
-  this->server_ = socket::socket_ip_loop_monitored(SOCK_STREAM, 0);  // monitored for incoming connections
-  if (this->server_ == nullptr) {
-    this->log_socket_error_("creation");
+void MeshmeshOtaComponent::setup() {
+  this->m_socket_ = new espmeshmesh::MeshSocket(MESHMESH_OTA_PORT);
+  this->m_socket_->recvDatagramCb(
+      std::bind(&MeshmeshOtaComponent::handle_frame_, this, std::placeholders::_1, std::placeholders::_2,
+                std::placeholders::_3, std::placeholders::_4));
+  int8_t err = this->m_socket_->open();
+  if (err != espmeshmesh::MeshSocket::errSuccess) {
+    ESP_LOGE(TAG, "Error opening socket: %s", espmeshmesh::MeshSocket::error2string(
+                                                    static_cast<espmeshmesh::MeshSocket::ErrorCodes>(err)));
     this->mark_failed();
-    return;
-  }
-  int enable = 1;
-  int err = this->server_->setsockopt(SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
-  if (err != 0) {
-    this->log_socket_error_("reuseaddr");
-    // we can still continue
-  }
-  err = this->server_->setblocking(false);
-  if (err != 0) {
-    this->log_socket_error_("non-blocking");
-    this->mark_failed();
-    return;
-  }
-
-  struct sockaddr_storage server;
-
-  socklen_t sl = socket::set_sockaddr_any((struct sockaddr *) &server, sizeof(server), this->port_);
-  if (sl == 0) {
-    this->log_socket_error_("set sockaddr");
-    this->mark_failed();
-    return;
-  }
-
-  err = this->server_->bind((struct sockaddr *) &server, sizeof(server));
-  if (err != 0) {
-    this->log_socket_error_("bind");
-    this->mark_failed();
-    return;
-  }
-
-  err = this->server_->listen(4);
-  if (err != 0) {
-    this->log_socket_error_("listen");
-    this->mark_failed();
-    return;
   }
 }
 
-void MeshmeshOTAComponent::dump_config() {
-  ESP_LOGCONFIG(TAG,
-                "Over-The-Air updates:\n"
-                "  Address: %s:%u\n"
-                "  Version: %d",
-                network::get_use_address().c_str(), this->port_, USE_OTA_VERSION);
+void MeshmeshOtaComponent::on_shutdown() {
+  if (this->m_socket_ != nullptr) {
+    this->m_socket_->close();
+    delete this->m_socket_;
+    this->m_socket_ = nullptr;
+  }
+}
+
+float MeshmeshOtaComponent::get_setup_priority() const { return setup_priority::AFTER_WIFI; }
+
+void MeshmeshOtaComponent::dump_config() {
+  ESP_LOGCONFIG(TAG, "MeshMesh OTA (datagram port 0x%02X, protocol version %d)", MESHMESH_OTA_PORT, USE_OTA_VERSION);
 #ifdef USE_OTA_PASSWORD
   if (!this->password_.empty()) {
     ESP_LOGCONFIG(TAG, "  Password configured");
@@ -92,431 +67,555 @@ void MeshmeshOTAComponent::dump_config() {
 #endif
 }
 
-void MeshmeshOTAComponent::loop() {
-  // Skip handle_handshake_() call if no client connected and no incoming connections
-  // This optimization reduces idle loop overhead when OTA is not active
-  // Note: No need to check server_ for null as the component is marked failed in setup()
-  // if server_ creation fails
-  if (this->client_ != nullptr || this->server_->ready()) {
-    this->handle_handshake_();
+void MeshmeshOtaComponent::loop() {
+  if (this->m_socket_ == nullptr) {
+    return;
   }
-}
-
-static const uint8_t FEATURE_SUPPORTS_COMPRESSION = 0x01;
-
-void MeshmeshOTAComponent::handle_handshake_() {
-  /// Handle the initial OTA handshake.
-  ///
-  /// This method is non-blocking and will return immediately if no data is available.
-  /// It waits for the first magic byte (0x6C) before proceeding to handle_data_().
-  /// A 10-second timeout is enforced from initial connection.
-
-  if (this->client_ == nullptr) {
-    // We already checked server_->ready() in loop(), so we can accept directly
-    struct sockaddr_storage source_addr;
-    socklen_t addr_len = sizeof(source_addr);
-    int enable = 1;
-
-    this->client_ = this->server_->accept_loop_monitored((struct sockaddr *) &source_addr, &addr_len);
-    if (this->client_ == nullptr)
-      return;
-    int err = this->client_->setsockopt(IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(int));
-    if (err != 0) {
-      this->log_socket_error_("nodelay");
-      this->cleanup_connection_();
-      return;
-    }
-    err = this->client_->setblocking(false);
-    if (err != 0) {
-      this->log_socket_error_("non-blocking");
-      this->cleanup_connection_();
-      return;
-    }
-    this->log_start_("handshake");
-    this->client_connect_time_ = App.get_loop_component_start_time();
-  }
-
-  // Check for handshake timeout
-  uint32_t now = App.get_loop_component_start_time();
-  if (now - this->client_connect_time_ > OTA_SOCKET_TIMEOUT_HANDSHAKE) {
-    ESP_LOGW(TAG, "Handshake timeout");
-    this->cleanup_connection_();
+  if (!this->has_peer_ && this->rx_available_() == 0) {
     return;
   }
 
-  // Try to read first byte of magic bytes
-  uint8_t first_byte;
-  ssize_t read = this->client_->read(&first_byte, 1);
-
-  if (read == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-    return;  // No data yet, try again next loop
-  }
-
-  if (read <= 0) {
-    // Error or connection closed
-    if (read == -1) {
-      this->log_socket_error_("reading first byte");
+  if (this->ota_state_ == OTAState::IDLE) {
+    if (this->rx_available_() > 0) {
+      this->has_peer_ = true;
+      this->session_start_ms_ = millis();
+      this->transition_ota_state_(OTAState::MAGIC_READ);
+      ESP_LOGD(TAG, "Starting handshake from %06X", this->peer_.address);
     } else {
-      ESP_LOGW(TAG, "Remote closed during handshake");
+      return;
     }
-    this->cleanup_connection_();
-    return;
   }
 
-  // Got first byte, check if it's the magic byte
-  if (first_byte != 0x6C) {
-    ESP_LOGW(TAG, "Invalid initial byte: 0x%02X", first_byte);
-    this->cleanup_connection_();
-    return;
+  if (this->ota_state_ < OTAState::DATA_AUTH_OK) {
+    if (this->check_timeout_(OTA_TIMEOUT_HANDSHAKE_MS)) {
+      ESP_LOGW(TAG, "Handshake timeout");
+      this->cleanup_session_();
+      return;
+    }
+    this->handle_handshake_();
+  } else {
+    if (this->check_timeout_(OTA_TIMEOUT_DATA_MS)) {
+      ESP_LOGW(TAG, "Data transfer timeout");
+      this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_UNKNOWN);
+      return;
+    }
+    this->handle_data_step_();
   }
-
-  // First byte is valid, continue with data handling
-  this->handle_data_();
 }
 
-void MeshmeshOTAComponent::handle_data_() {
-  /// Handle the OTA data transfer and update process.
-  ///
-  /// This method is blocking and will not return until the OTA update completes,
-  /// fails, or times out. It handles authentication, receives the firmware data,
-  /// writes it to flash, and reboots on success.
-  ota::OTAResponseTypes error_code = ota::OTA_RESPONSE_ERROR_UNKNOWN;
-  bool update_started = false;
-  size_t total = 0;
-  uint32_t last_progress = 0;
-  uint8_t buf[1024];
-  char *sbuf = reinterpret_cast<char *>(buf);
-  size_t ota_size;
-  uint8_t ota_features;
-  std::unique_ptr<ota::OTABackend> backend;
-  (void) ota_features;
-#if USE_OTA_VERSION == 2
-  size_t size_acknowledged = 0;
+void MeshmeshOtaComponent::handle_frame_(const uint8_t *buf, uint16_t len, const espmeshmesh::MeshAddress &from,
+                                          int16_t rssi) {
+  (void) rssi;
+  if (len == 0) {
+    return;
+  }
+
+  if (this->has_peer_ && from.address != this->peer_.address) {
+    ESP_LOGV(TAG, "Ignoring datagram from %06X (session peer %06X)", from.address, this->peer_.address);
+    return;
+  }
+
+  if (!this->has_peer_) {
+    this->peer_ = from;
+    this->peer_.port = MESHMESH_OTA_PORT;
+  }
+
+  if (this->rx_available_() + len > RX_RING_MAX) {
+    ESP_LOGE(TAG, "RX ring overflow, aborting session");
+    this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_UNKNOWN);
+    return;
+  }
+
+  this->rx_append_(buf, len);
+}
+
+void MeshmeshOtaComponent::rx_append_(const uint8_t *data, uint16_t len) {
+  this->rx_buf_.insert(this->rx_buf_.end(), data, data + len);
+}
+
+size_t MeshmeshOtaComponent::rx_available_() const {
+  if (this->rx_read_pos_ >= this->rx_buf_.size()) {
+    return 0;
+  }
+  return this->rx_buf_.size() - this->rx_read_pos_;
+}
+
+ssize_t MeshmeshOtaComponent::rx_read_(uint8_t *dst, size_t len) {
+  const size_t avail = this->rx_available_();
+  if (avail == 0) {
+    return 0;
+  }
+  const size_t to_copy = avail < len ? avail : len;
+  memcpy(dst, this->rx_buf_.data() + this->rx_read_pos_, to_copy);
+  this->rx_read_pos_ += to_copy;
+  if (this->rx_read_pos_ >= 4096 && this->rx_read_pos_ == this->rx_buf_.size()) {
+    this->rx_buf_.clear();
+    this->rx_read_pos_ = 0;
+  } else if (this->rx_read_pos_ >= 4096) {
+    this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.begin() + this->rx_read_pos_);
+    this->rx_read_pos_ = 0;
+  }
+  return static_cast<ssize_t>(to_copy);
+}
+
+bool MeshmeshOtaComponent::send_to_peer_(const uint8_t *data, uint16_t len) {
+  if (this->m_socket_ == nullptr || !this->has_peer_) {
+    return false;
+  }
+  espmeshmesh::MeshAddress target = this->peer_;
+  target.port = MESHMESH_OTA_PORT;
+  int16_t sent = this->m_socket_->sendDatagram(data, len, target, nullptr);
+  if (sent < 0) {
+    ESP_LOGW(TAG, "sendDatagram failed: %s",
+             espmeshmesh::MeshSocket::error2string(static_cast<espmeshmesh::MeshSocket::ErrorCodes>(sent)));
+    return false;
+  }
+  return true;
+}
+
+bool MeshmeshOtaComponent::try_read_(size_t to_read) {
+  const size_t need = to_read - this->handshake_buf_pos_;
+  const ssize_t got = this->rx_read_(this->handshake_buf_ + this->handshake_buf_pos_, need);
+  if (got <= 0) {
+    return false;
+  }
+  this->handshake_buf_pos_ += static_cast<size_t>(got);
+  return this->handshake_buf_pos_ >= to_read;
+}
+
+bool MeshmeshOtaComponent::try_write_(size_t to_write) {
+  const size_t remaining = to_write - this->handshake_buf_pos_;
+  if (!this->send_to_peer_(this->handshake_buf_ + this->handshake_buf_pos_, static_cast<uint16_t>(remaining))) {
+    return false;
+  }
+  this->handshake_buf_pos_ = to_write;
+  return true;
+}
+
+bool MeshmeshOtaComponent::readall_(uint8_t *buf, size_t len) {
+  size_t at = 0;
+  while (at < len) {
+    const ssize_t got = this->rx_read_(buf + at, len - at);
+    if (got > 0) {
+      at += static_cast<size_t>(got);
+      continue;
+    }
+    this->yield_and_feed_watchdog_();
+    if (this->check_timeout_(OTA_TIMEOUT_DATA_MS)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MeshmeshOtaComponent::writeall_(const uint8_t *buf, size_t len) {
+  return this->send_to_peer_(buf, static_cast<uint16_t>(len));
+}
+
+bool MeshmeshOtaComponent::write_byte_(uint8_t byte) { return this->writeall_(&byte, 1); }
+
+void MeshmeshOtaComponent::transition_ota_state_(OTAState next_state) {
+  this->ota_state_ = next_state;
+  this->handshake_buf_pos_ = 0;
+}
+
+bool MeshmeshOtaComponent::check_timeout_(uint32_t timeout_ms) {
+  const uint32_t start =
+      (this->ota_state_ < OTAState::DATA_AUTH_OK) ? this->session_start_ms_ : this->data_phase_start_ms_;
+  return (millis() - start) > timeout_ms;
+}
+
+void MeshmeshOtaComponent::yield_and_feed_watchdog_() {
+  if (global_meshmesh_component != nullptr) {
+    global_meshmesh_component->loop();
+  }
+  App.feed_wdt();
+#ifdef USE_ESP8266
+  delay(5);
+#else
+  delay(1);
 #endif
+}
 
-  // Read remaining 4 bytes of magic (we already read the first byte 0x6C in handle_handshake_)
-  if (!this->readall_(buf, 4)) {
-    this->log_read_error_("magic bytes");
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
+void MeshmeshOtaComponent::log_start_(const char *phase) {
+  ESP_LOGD(TAG, "Starting %s from %06X", phase, this->peer_.address);
+}
+
+void MeshmeshOtaComponent::log_read_error_(const char *what) { ESP_LOGW(TAG, "Read %s failed", what); }
+
+void MeshmeshOtaComponent::send_error_and_cleanup_(ota::OTAResponseTypes error) {
+  const uint8_t err_byte = static_cast<uint8_t>(error);
+  this->send_to_peer_(&err_byte, 1);
+  if (this->backend_ != nullptr && this->update_started_) {
+    this->backend_->abort();
   }
-  // Check remaining magic bytes: 0x26, 0xF7, 0x5C, 0x45
-  if (buf[0] != 0x26 || buf[1] != 0xF7 || buf[2] != 0x5C || buf[3] != 0x45) {
-    ESP_LOGW(TAG, "Magic bytes mismatch! 0x6C-0x%02X-0x%02X-0x%02X-0x%02X", buf[0], buf[1], buf[2], buf[3]);
-    error_code = ota::OTA_RESPONSE_ERROR_MAGIC;
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-  }
+  this->cleanup_session_();
+}
 
-  // Send OK and version - 2 bytes
-  buf[0] = ota::OTA_RESPONSE_OK;
-  buf[1] = USE_OTA_VERSION;
-  this->writeall_(buf, 2);
+void MeshmeshOtaComponent::cleanup_session_() {
+  this->has_peer_ = false;
+  this->peer_ = espmeshmesh::MeshAddress{};
+  this->rx_buf_.clear();
+  this->rx_read_pos_ = 0;
+  this->handshake_buf_pos_ = 0;
+  this->ota_state_ = OTAState::IDLE;
+  this->ota_features_ = 0;
+  this->backend_ = nullptr;
+  this->session_start_ms_ = 0;
+  this->data_phase_start_ms_ = 0;
+  this->ota_size_ = 0;
+  this->firmware_total_ = 0;
+  this->update_started_ = false;
+#if USE_OTA_VERSION == 2
+  this->size_acknowledged_ = 0;
+#endif
+#ifdef USE_OTA_PASSWORD
+  this->cleanup_auth_();
+#endif
+}
 
-  backend = ota::make_ota_backend();
-
-  // Read features - 1 byte
-  if (!this->readall_(buf, 1)) {
-    this->log_read_error_("features");
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-  }
-  ota_features = buf[0];  // NOLINT
-  ESP_LOGV(TAG, "Features: 0x%02X", ota_features);
-
-  // Acknowledge header - 1 byte
-  buf[0] = ota::OTA_RESPONSE_HEADER_OK;
-  if ((ota_features & FEATURE_SUPPORTS_COMPRESSION) != 0 && backend->supports_compression()) {
-    buf[0] = ota::OTA_RESPONSE_SUPPORTS_COMPRESSION;
-  }
-
-  this->writeall_(buf, 1);
+void MeshmeshOtaComponent::handle_handshake_() {
+  switch (this->ota_state_) {
+    case OTAState::MAGIC_READ: {
+      if (!this->try_read_(5)) {
+        return;
+      }
+      static const uint8_t MAGIC_BYTES[5] = {0x6C, 0x26, 0xF7, 0x5C, 0x45};
+      if (memcmp(this->handshake_buf_, MAGIC_BYTES, 5) != 0) {
+        ESP_LOGW(TAG, "Magic bytes mismatch");
+        this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_MAGIC);
+        return;
+      }
+      this->transition_ota_state_(OTAState::MAGIC_ACK);
+      this->handshake_buf_[0] = ota::OTA_RESPONSE_OK;
+      this->handshake_buf_[1] = USE_OTA_VERSION;
+      [[fallthrough]];
+    }
+    case OTAState::MAGIC_ACK: {
+      if (!this->try_write_(2)) {
+        return;
+      }
+      this->backend_ = ota::make_ota_backend();
+      this->transition_ota_state_(OTAState::FEATURE_READ);
+      [[fallthrough]];
+    }
+    case OTAState::FEATURE_READ: {
+      if (!this->try_read_(1)) {
+        return;
+      }
+      this->ota_features_ = this->handshake_buf_[0];
+      this->transition_ota_state_(OTAState::FEATURE_ACK);
+      this->handshake_buf_[0] =
+          ((this->ota_features_ & FEATURE_SUPPORTS_COMPRESSION) != 0 && this->backend_->supports_compression())
+              ? ota::OTA_RESPONSE_SUPPORTS_COMPRESSION
+              : ota::OTA_RESPONSE_HEADER_OK;
+      [[fallthrough]];
+    }
+    case OTAState::FEATURE_ACK: {
+      if (!this->try_write_(1)) {
+        return;
+      }
+#ifdef USE_OTA_PASSWORD
+      if (!this->password_.empty()) {
+        this->transition_ota_state_(OTAState::AUTH_SEND);
+        return;
+      }
+#endif
+      this->data_phase_start_ms_ = millis();
+      this->transition_ota_state_(OTAState::DATA_AUTH_OK);
+      return;
+    }
 
 #ifdef USE_OTA_PASSWORD
-  if (!this->password_.empty()) {
-    buf[0] = ota::OTA_RESPONSE_REQUEST_AUTH;
-    this->writeall_(buf, 1);
-    md5::MD5Digest md5{};
-    md5.init();
-    sprintf(sbuf, "%08" PRIx32, random_uint32());
-    md5.add(sbuf, 8);
-    md5.calculate();
-    md5.get_hex(sbuf);
-    ESP_LOGV(TAG, "Auth: Nonce is %s", sbuf);
-
-    // Send nonce, 32 bytes hex MD5
-    if (!this->writeall_(reinterpret_cast<uint8_t *>(sbuf), 32)) {
-      ESP_LOGW(TAG, "Auth: Writing nonce failed");
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-    }
-
-    // prepare challenge
-    md5.init();
-    md5.add(this->password_.c_str(), this->password_.length());
-    // add nonce
-    md5.add(sbuf, 32);
-
-    // Receive cnonce, 32 bytes hex MD5
-    if (!this->readall_(buf, 32)) {
-      ESP_LOGW(TAG, "Auth: Reading cnonce failed");
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-    }
-    sbuf[32] = '\0';
-    ESP_LOGV(TAG, "Auth: CNonce is %s", sbuf);
-    // add cnonce
-    md5.add(sbuf, 32);
-
-    // calculate result
-    md5.calculate();
-    md5.get_hex(sbuf);
-    ESP_LOGV(TAG, "Auth: Result is %s", sbuf);
-
-    // Receive result, 32 bytes hex MD5
-    if (!this->readall_(buf + 64, 32)) {
-      ESP_LOGW(TAG, "Auth: Reading response failed");
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-    }
-    sbuf[64 + 32] = '\0';
-    ESP_LOGV(TAG, "Auth: Response is %s", sbuf + 64);
-
-    bool matches = true;
-    for (uint8_t i = 0; i < 32; i++)
-      matches = matches && buf[i] == buf[64 + i];
-
-    if (!matches) {
-      ESP_LOGW(TAG, "Auth failed! Passwords do not match");
-      error_code = ota::OTA_RESPONSE_ERROR_AUTH_INVALID;
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-    }
-  }
-#endif  // USE_OTA_PASSWORD
-
-  // Acknowledge auth OK - 1 byte
-  buf[0] = ota::OTA_RESPONSE_AUTH_OK;
-  this->writeall_(buf, 1);
-
-  // Read size, 4 bytes MSB first
-  if (!this->readall_(buf, 4)) {
-    this->log_read_error_("size");
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-  }
-  ota_size = 0;
-  for (uint8_t i = 0; i < 4; i++) {
-    ota_size <<= 8;
-    ota_size |= buf[i];
-  }
-  ESP_LOGV(TAG, "Size is %u bytes", ota_size);
-
-  // Now that we've passed authentication and are actually
-  // starting the update, set the warning status and notify
-  // listeners. This ensures that port scanners do not
-  // accidentally trigger the update process.
-  this->log_start_("update");
-  this->status_set_warning();
-#ifdef USE_OTA_STATE_CALLBACK
-  this->state_callback_.call(ota::OTA_STARTED, 0.0f, 0);
-#endif
-
-  // This will block for a few seconds as it locks flash
-  error_code = backend->begin(ota_size);
-  if (error_code != ota::OTA_RESPONSE_OK)
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-  update_started = true;
-
-  // Acknowledge prepare OK - 1 byte
-  buf[0] = ota::OTA_RESPONSE_UPDATE_PREPARE_OK;
-  this->writeall_(buf, 1);
-
-  // Read binary MD5, 32 bytes
-  if (!this->readall_(buf, 32)) {
-    this->log_read_error_("MD5 checksum");
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-  }
-  sbuf[32] = '\0';
-  ESP_LOGV(TAG, "Update: Binary MD5 is %s", sbuf);
-  backend->set_update_md5(sbuf);
-
-  // Acknowledge MD5 OK - 1 byte
-  buf[0] = ota::OTA_RESPONSE_BIN_MD5_OK;
-  this->writeall_(buf, 1);
-
-  while (total < ota_size) {
-    // TODO: timeout check
-    size_t requested = std::min(sizeof(buf), ota_size - total);
-    ssize_t read = this->client_->read(buf, requested);
-    if (read == -1) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        this->yield_and_feed_watchdog_();
-        continue;
+    case OTAState::AUTH_SEND: {
+      if (!this->handle_auth_send_()) {
+        return;
       }
-      ESP_LOGW(TAG, "Read error, errno %d", errno);
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-    } else if (read == 0) {
-      // $ man recv
-      // "When  a  stream socket peer has performed an orderly shutdown, the return value will
-      // be 0 (the traditional "end-of-file" return)."
-      ESP_LOGW(TAG, "Remote closed connection");
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
+      this->transition_ota_state_(OTAState::AUTH_READ);
+      [[fallthrough]];
     }
-/*
-    On esp8266 platforms the program is executed in flash, this means that is not possible to execute any function
-    during a flash write or erase operation. Then if a packet is received during a flash write or a flash erase, the
-    cpu will crash.
-    To avoid this, we set the lockdown mode during the write/erase operations to be sure that no packet is handled.
-*/
-#ifdef USE_ESP8266
-    global_meshmesh_component->getNetwork()->setLockdownMode(true);
-#endif
-    error_code = backend->write(buf, read);
-#ifdef USE_ESP8266
-    global_meshmesh_component->getNetwork()->setLockdownMode(false);
-#endif
-    if (error_code != ota::OTA_RESPONSE_OK) {
-      ESP_LOGW(TAG, "Flash write error, code: %d", error_code);
-      goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
+    case OTAState::AUTH_READ: {
+      if (!this->handle_auth_read_()) {
+        return;
+      }
+      this->data_phase_start_ms_ = millis();
+      this->transition_ota_state_(OTAState::DATA_AUTH_OK);
+      return;
     }
-    total += read;
-    // FIXME: This delay is needed to ensure the data is written to the flash on esp8266 platforms.
-    // It should be removed once the issue is fixed.
-    delay(10);
+#endif
+
+    default:
+      break;
+  }
+}
+
+void MeshmeshOtaComponent::handle_data_step_() {
+  ota::OTAResponseTypes error_code = ota::OTA_RESPONSE_ERROR_UNKNOWN;
+
+  switch (this->ota_state_) {
+    case OTAState::DATA_AUTH_OK: {
+      if (!this->write_byte_(ota::OTA_RESPONSE_AUTH_OK)) {
+        return;
+      }
+      this->transition_ota_state_(OTAState::DATA_SIZE);
+      [[fallthrough]];
+    }
+    case OTAState::DATA_SIZE: {
+      if (!this->readall_(this->data_buf_, 4)) {
+        this->log_read_error_("size");
+        this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_UNKNOWN);
+        return;
+      }
+      this->ota_size_ = (static_cast<size_t>(this->data_buf_[0]) << 24) |
+                        (static_cast<size_t>(this->data_buf_[1]) << 16) |
+                        (static_cast<size_t>(this->data_buf_[2]) << 8) | this->data_buf_[3];
+      ESP_LOGV(TAG, "OTA size %u bytes", this->ota_size_);
+      this->log_start_("update");
+      this->transition_ota_state_(OTAState::DATA_BEGIN);
+      [[fallthrough]];
+    }
+    case OTAState::DATA_BEGIN: {
+      error_code = this->backend_->begin(this->ota_size_);
+      if (error_code != ota::OTA_RESPONSE_OK) {
+        this->send_error_and_cleanup_(error_code);
+        return;
+      }
+      this->update_started_ = true;
+      this->firmware_total_ = 0;
+      this->last_progress_ms_ = millis();
 #if USE_OTA_VERSION == 2
-    while (size_acknowledged + OTA_BLOCK_SIZE <= total || (total == ota_size && size_acknowledged < ota_size)) {
-      buf[0] = ota::OTA_RESPONSE_CHUNK_OK;
-      this->writeall_(buf, 1);
-      size_acknowledged += OTA_BLOCK_SIZE;
+      this->size_acknowledged_ = 0;
+#endif
+      this->transition_ota_state_(OTAState::DATA_PREPARE_OK);
+      [[fallthrough]];
     }
-#endif
-
-    uint32_t now = millis();
-    if (now - last_progress > 1000) {
-      last_progress = now;
-      float percentage = (total * 100.0f) / ota_size;
-      ESP_LOGD(TAG, "Progress: %0.1f%%", percentage);
-#ifdef USE_OTA_STATE_CALLBACK
-      this->state_callback_.call(ota::OTA_IN_PROGRESS, percentage, 0);
-#endif
-      // feed watchdog and give other tasks a chance to run
-      this->yield_and_feed_watchdog_();
+    case OTAState::DATA_PREPARE_OK: {
+      if (!this->write_byte_(ota::OTA_RESPONSE_UPDATE_PREPARE_OK)) {
+        return;
+      }
+      this->transition_ota_state_(OTAState::DATA_MD5);
+      [[fallthrough]];
     }
-  }
+    case OTAState::DATA_MD5: {
+      if (!this->readall_(this->data_buf_, 32)) {
+        this->log_read_error_("MD5 checksum");
+        this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_UNKNOWN);
+        return;
+      }
+      char md5_str[33];
+      memcpy(md5_str, this->data_buf_, 32);
+      md5_str[32] = '\0';
+      this->backend_->set_update_md5(md5_str);
+      this->transition_ota_state_(OTAState::DATA_MD5_OK);
+      [[fallthrough]];
+    }
+    case OTAState::DATA_MD5_OK: {
+      if (!this->write_byte_(ota::OTA_RESPONSE_BIN_MD5_OK)) {
+        return;
+      }
+      this->transition_ota_state_(OTAState::DATA_FIRMWARE);
+      return;
+    }
+    case OTAState::DATA_FIRMWARE: {
+      if (this->firmware_total_ >= this->ota_size_) {
+        this->transition_ota_state_(OTAState::DATA_RECEIVE_OK);
+        return;
+      }
+      const size_t remaining = this->ota_size_ - this->firmware_total_;
+      const size_t requested = remaining < OTA_BUFFER_SIZE ? remaining : OTA_BUFFER_SIZE;
+      if (this->rx_available_() == 0) {
+        this->yield_and_feed_watchdog_();
+        return;
+      }
+      const ssize_t read = this->rx_read_(this->data_buf_, requested);
+      if (read <= 0) {
+        this->yield_and_feed_watchdog_();
+        return;
+      }
 
-  // Acknowledge receive OK - 1 byte
-  buf[0] = ota::OTA_RESPONSE_RECEIVE_OK;
-  this->writeall_(buf, 1);
-
-  error_code = backend->end();
-  if (error_code != ota::OTA_RESPONSE_OK) {
-    ESP_LOGW(TAG, "Error ending update! code: %d", error_code);
-    goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
-  }
-
-  // Acknowledge Update end OK - 1 byte
-  buf[0] = ota::OTA_RESPONSE_UPDATE_END_OK;
-  this->writeall_(buf, 1);
-
-  // Read ACK
-  if (!this->readall_(buf, 1) || buf[0] != ota::OTA_RESPONSE_OK) {
-    this->log_read_error_("ack");
-    // do not go to error, this is not fatal
-  }
-
-  this->cleanup_connection_();
-  delay(10);
-  ESP_LOGI(TAG, "Update complete");
-  this->status_clear_warning();
-#ifdef USE_OTA_STATE_CALLBACK
-  this->state_callback_.call(ota::OTA_COMPLETED, 100.0f, 0);
+#ifdef USE_ESP8266
+      if (global_meshmesh_component != nullptr) {
+        global_meshmesh_component->getNetwork()->setLockdownMode(true);
+      }
 #endif
-  delay(100);  // NOLINT
-  App.safe_reboot();
-
-error:
-  buf[0] = static_cast<uint8_t>(error_code);
-  this->writeall_(buf, 1);
-  this->cleanup_connection_();
-
-  if (backend != nullptr && update_started) {
-    backend->abort();
-  }
-
-  this->status_momentary_error("onerror", 5000);
-#ifdef USE_OTA_STATE_CALLBACK
-  this->state_callback_.call(ota::OTA_ERROR, 0.0f, static_cast<uint8_t>(error_code));
+      error_code = this->backend_->write(this->data_buf_, static_cast<size_t>(read));
+#ifdef USE_ESP8266
+      if (global_meshmesh_component != nullptr) {
+        global_meshmesh_component->getNetwork()->setLockdownMode(false);
+      }
 #endif
+
+      if (error_code != ota::OTA_RESPONSE_OK) {
+        ESP_LOGW(TAG, "Flash write err %d", error_code);
+        this->send_error_and_cleanup_(error_code);
+        return;
+      }
+      this->firmware_total_ += static_cast<size_t>(read);
+
+#if USE_OTA_VERSION == 2
+      while (this->size_acknowledged_ + OTA_BLOCK_SIZE <= this->firmware_total_ ||
+             (this->firmware_total_ == this->ota_size_ && this->size_acknowledged_ < this->ota_size_)) {
+        if (!this->write_byte_(ota::OTA_RESPONSE_CHUNK_OK)) {
+          return;
+        }
+        this->size_acknowledged_ += OTA_BLOCK_SIZE;
+      }
+#endif
+
+      const uint32_t now = millis();
+      if (now - this->last_progress_ms_ > 1000) {
+        this->last_progress_ms_ = now;
+        ESP_LOGD(TAG, "Progress: %0.1f%%", (this->firmware_total_ * 100.0f) / this->ota_size_);
+        this->yield_and_feed_watchdog_();
+      }
+      return;
+    }
+    case OTAState::DATA_RECEIVE_OK: {
+      if (!this->write_byte_(ota::OTA_RESPONSE_RECEIVE_OK)) {
+        return;
+      }
+      this->transition_ota_state_(OTAState::DATA_END);
+      [[fallthrough]];
+    }
+    case OTAState::DATA_END: {
+      error_code = this->backend_->end();
+      if (error_code != ota::OTA_RESPONSE_OK) {
+        ESP_LOGW(TAG, "End update err %d", error_code);
+        this->send_error_and_cleanup_(error_code);
+        return;
+      }
+      this->transition_ota_state_(OTAState::DATA_END_OK);
+      [[fallthrough]];
+    }
+    case OTAState::DATA_END_OK: {
+      if (!this->write_byte_(ota::OTA_RESPONSE_UPDATE_END_OK)) {
+        return;
+      }
+      this->transition_ota_state_(OTAState::DATA_FINAL_ACK);
+      return;
+    }
+    case OTAState::DATA_FINAL_ACK: {
+      if (this->rx_available_() == 0) {
+        this->yield_and_feed_watchdog_();
+        return;
+      }
+      const ssize_t got = this->rx_read_(this->data_buf_, 1);
+      if (got < 1) {
+        return;
+      }
+      if (this->data_buf_[0] != ota::OTA_RESPONSE_OK) {
+        ESP_LOGW(TAG, "Final ACK mismatch");
+      }
+      this->transition_ota_state_(OTAState::DATA_REBOOT);
+      [[fallthrough]];
+    }
+    case OTAState::DATA_REBOOT: {
+      ESP_LOGI(TAG, "Update complete");
+      this->cleanup_session_();
+      delay(100);
+      App.safe_reboot();
+      return;
+    }
+    default:
+      break;
+  }
 }
 
-bool MeshmeshOTAComponent::readall_(uint8_t *buf, size_t len) {
-  uint32_t start = millis();
-  uint32_t at = 0;
-  while (len - at > 0) {
-    uint32_t now = millis();
-    if (now - start > OTA_SOCKET_TIMEOUT_DATA) {
-      ESP_LOGW(TAG, "Timeout reading %d bytes", len);
-      return false;
-    }
+#ifdef USE_OTA_PASSWORD
+void MeshmeshOtaComponent::log_auth_warning_(const char *msg) { ESP_LOGW(TAG, "Auth: %s", msg); }
 
-    ssize_t read = this->client_->read(buf + at, len - at);
-    if (read == -1) {
-      if (errno != EAGAIN && errno != EWOULDBLOCK) {
-        ESP_LOGW(TAG, "Error reading %d bytes, errno %d", len, errno);
-        return false;
-      }
-    } else if (read == 0) {
-      ESP_LOGW(TAG, "Remote closed connection");
-      return false;
-    } else {
-      at += read;
-    }
-    this->yield_and_feed_watchdog_();
+bool MeshmeshOtaComponent::select_auth_type_() {
+  if ((this->ota_features_ & FEATURE_SUPPORTS_SHA256_AUTH) == 0) {
+    this->log_auth_warning_("SHA256 required");
+    this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_AUTH_INVALID);
+    return false;
   }
-
+  this->auth_type_ = ota::OTA_RESPONSE_REQUEST_SHA256_AUTH;
   return true;
 }
-bool MeshmeshOTAComponent::writeall_(const uint8_t *buf, size_t len) {
-  uint32_t start = millis();
-  uint32_t at = 0;
-  while (len - at > 0) {
-    uint32_t now = millis();
-    if (now - start > OTA_SOCKET_TIMEOUT_DATA) {
-      ESP_LOGW(TAG, "Timeout writing %d bytes", len);
+
+bool MeshmeshOtaComponent::handle_auth_send_() {
+  if (!this->auth_buf_) {
+    if (!this->select_auth_type_()) {
       return false;
     }
 
-    ssize_t written = this->client_->write(buf + at, len - at);
-    if (written == -1) {
-      if (errno != EAGAIN && errno != EWOULDBLOCK) {
-        ESP_LOGW(TAG, "Error writing %d bytes, errno %d", len, errno);
-        return false;
-      }
-    } else {
-      at += written;
+    sha256::SHA256 hasher;
+    const size_t hex_size = hasher.get_size() * 2;
+    const size_t nonce_len = hasher.get_size() / 4;
+    const size_t auth_buf_size = 1 + 3 * hex_size;
+    this->auth_buf_ = std::make_unique<uint8_t[]>(auth_buf_size);
+    this->auth_buf_pos_ = 0;
+
+    char *buf = reinterpret_cast<char *>(this->auth_buf_.get() + 1);
+    if (!random_bytes(reinterpret_cast<uint8_t *>(buf), nonce_len)) {
+      this->log_auth_warning_("Random failed");
+      this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_UNKNOWN);
+      return false;
     }
-    this->yield_and_feed_watchdog_();
+
+    hasher.init();
+    hasher.add(buf, nonce_len);
+    hasher.calculate();
+    this->auth_buf_[0] = this->auth_type_;
+    hasher.get_hex(buf);
   }
+
+  constexpr size_t hex_size = SHA256_HEX_SIZE;
+  const size_t to_write = 1 + hex_size;
+  const size_t remaining = to_write - this->auth_buf_pos_;
+  if (!this->send_to_peer_(this->auth_buf_.get() + this->auth_buf_pos_, static_cast<uint16_t>(remaining))) {
+    return false;
+  }
+  this->auth_buf_pos_ = to_write;
+  this->auth_buf_pos_ = 0;
   return true;
 }
 
-float MeshmeshOTAComponent::get_setup_priority() const { return setup_priority::LATE; }
-uint16_t MeshmeshOTAComponent::get_port() const { return this->port_; }
-void MeshmeshOTAComponent::set_port(uint16_t port) { this->port_ = port; }
+bool MeshmeshOtaComponent::handle_auth_read_() {
+  constexpr size_t hex_size = SHA256_HEX_SIZE;
+  const size_t to_read = hex_size * 2;
+  const size_t cnonce_offset = 1 + hex_size;
 
-void MeshmeshOTAComponent::log_socket_error_(const char *msg) { ESP_LOGW(TAG, "Socket %s: errno %d", msg, errno); }
+  const size_t need = to_read - this->auth_buf_pos_;
+  const ssize_t got =
+      this->rx_read_(this->auth_buf_.get() + cnonce_offset + this->auth_buf_pos_, need);
+  if (got <= 0) {
+    return false;
+  }
+  this->auth_buf_pos_ += static_cast<size_t>(got);
+  if (this->auth_buf_pos_ < to_read) {
+    return false;
+  }
 
-void MeshmeshOTAComponent::log_read_error_(const char *what) { ESP_LOGW(TAG, "Read %s failed", what); }
+  const char *nonce = reinterpret_cast<char *>(this->auth_buf_.get() + 1);
+  const char *cnonce = nonce + hex_size;
+  const char *response = cnonce + hex_size;
 
-void MeshmeshOTAComponent::log_start_(const char *phase) {
-  ESP_LOGD(TAG, "Starting %s from %s", phase, this->client_->getpeername().c_str());
+  sha256::SHA256 hasher;
+  hasher.init();
+  hasher.add(this->password_.c_str(), this->password_.length());
+  hasher.add(nonce, hex_size * 2);
+  hasher.calculate();
+
+  if (!hasher.equals_hex(response)) {
+    this->log_auth_warning_("Password mismatch");
+    this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_AUTH_INVALID);
+    return false;
+  }
+
+  this->cleanup_auth_();
+  return true;
 }
 
-void MeshmeshOTAComponent::cleanup_connection_() {
-  this->client_->close();
-  this->client_ = nullptr;
-  this->client_connect_time_ = 0;
+void MeshmeshOtaComponent::cleanup_auth_() {
+  this->auth_buf_ = nullptr;
+  this->auth_buf_pos_ = 0;
+  this->auth_type_ = 0;
 }
-
-void MeshmeshOTAComponent::yield_and_feed_watchdog_() {
-  meshmesh::global_meshmesh_component->loop();
-  App.feed_wdt();
-  delay(1);
-}
+#endif  // USE_OTA_PASSWORD
 
 }  // namespace meshmesh
 }  // namespace esphome
-#endif
+
+#endif  // USE_OTA
