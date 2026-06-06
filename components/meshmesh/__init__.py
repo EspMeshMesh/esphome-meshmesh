@@ -14,6 +14,7 @@ from esphome.const import (
 )
 from esphome.core import CORE, coroutine_with_priority
 from esphome.coroutine import CoroPriority
+from esphome.components.logger import request_log_listener
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,6 +92,9 @@ CONFIG_SCHEMA = cv.Schema(
 
 @coroutine_with_priority(CoroPriority.COMMUNICATION)
 async def to_code(config):
+    # Request a log listener slot for API log streaming
+    request_log_listener()
+
     cg.add_define("USE_MESH_MESH")
 
     if CONF_USE_STARPATH in config and config[CONF_USE_STARPATH]:
