@@ -2,23 +2,26 @@
 #if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 #include <cerrno>
 #include <cstring>
+#include <cstdio>
 #include <string>
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
+#ifdef USE_HOST
+#include "esphome/core/wake.h"
+#endif
 
 namespace esphome::socket {
 
 #ifdef USE_HOST
 // Shared ready() implementation for fd-based socket implementations (BSD and LWIP sockets).
-// Checks if the Application's select() loop has marked this fd as ready.
-bool socket_ready_fd(int fd, bool loop_monitored) { return !loop_monitored || App.is_socket_ready_(fd); }
+// Checks if the host wake select() loop has marked this fd as ready.
+bool socket_ready_fd(int fd, bool loop_monitored) { return !loop_monitored || wake_fd_ready(fd); }
 #endif
 
 // Start Meshmesh implementation -->
 #if defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 // Shared ready() implementation for Meshmesh socket implementations.
-// Checks if the Application's select() loop has marked this fd as ready.
-bool socket_ready_fd(int fd, bool loop_monitored) { return !loop_monitored || false; } // TODO: Implement Meshmesh ready()
+bool socket_ready_fd(int fd, bool loop_monitored) { return !loop_monitored || false; }  // TODO: Implement Meshmesh ready()
 #endif
 // <-- End Meshmesh implementation -->
 
@@ -60,7 +63,6 @@ static inline const char *esphome_inet_ntop4(const void *addr, char *buf, size_t
 #else
 // BSD sockets (host, ESP32-IDF)
 static inline const char *esphome_inet_ntop4(const void *addr, char *buf, size_t size) {
-  // FIXME: This is a temporary workaround to avoid the use of inet_ntop on ESP8266.
   return inet_ntop(AF_INET, addr, buf, size);
 }
 #if USE_NETWORK_IPV6
@@ -135,7 +137,7 @@ socklen_t set_sockaddr(struct sockaddr *addr, socklen_t addrlen, const char *ip_
     server->sin6_port = htons(port);
 
 #if defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
-    // Use standard inet_pton for BSD sockets
+    // Use standard inet_pton for BSD sockets / MeshMesh
     if (inet_pton(AF_INET6, ip_address, &server->sin6_addr) != 1) {
       errno = EINVAL;
       return 0;

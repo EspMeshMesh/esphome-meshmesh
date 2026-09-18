@@ -151,7 +151,7 @@ using socklen_t = uint32_t;
 
 #endif  // USE_SOCKET_IMPL_LWIP_SOCKETS
 
-#if defined(USE_SOCKET_IMPL_BSD_SOCKETS)
+#ifdef USE_SOCKET_IMPL_BSD_SOCKETS
 
 #include <cstdint>
 #include <fcntl.h>
@@ -185,6 +185,7 @@ using socklen_t = uint32_t;
 #endif
 
 #endif  // USE_SOCKET_IMPL_BSD_SOCKETS
+
 
 // Start Meshmesh implementation -->
 #if defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
@@ -328,7 +329,6 @@ struct iovec {
 #endif  // USE_SOCKET_IMPL_MESHMESH_ESP8266
 
 #if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
-// <-- End Meshmesh implementation -->
 
 namespace esphome::socket {
 
