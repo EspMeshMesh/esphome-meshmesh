@@ -111,6 +111,9 @@ async def to_code(config):
         cg.add_build_flag("-DESPMESH_CONNPATH_MAX_CONNECTIONS=0x10")
     if CORE.is_esp8266:
         cg.add_build_flag("-Wl,-wrap=ppEnqueueRxq")
+    if CORE.is_esp32:
+        # Allow overriding ieee80211_raw_frame_sanity_check (see espmeshmesh wifi_raw_tx_bypass.c)
+        cg.add_build_flag("-Wl,-zmuldefs")
 
     #cg.add_build_flag("-DUSE_POLITE_BROADCAST_PROTOCOL")
 
@@ -137,17 +140,18 @@ async def to_code(config):
     if CORE.is_esp8266:
         cg.add_library("ESP8266WiFi", None)
 
-    cg.add_library("ESPMeshMesh", "1.6.6")
-    # --> Uncomment this section and comment the line above to use a local copy of the espmeshmesh library
-    # remember to set the ESPMESHMESH_PATH environment variable to the path of the local copy of the
-    # espmeshmesh library
-    #
-    #import os
+    # Use local espmeshmesh while testing IDF 5.5 raw-TX bypass; flip back to registry for release.
+    import os
+    _espmeshmesh_path = os.environ.get(
+        "ESPMESHMESH_PATH", "/home/stefano/Sviluppo/Meshmesh/espmeshmesh"
+    )
+
     #cg.add_library(
     #    name="ESPMeshMesh",
-    #    version="1.6.3",
-    #    repository="file://" + os.environ["ESPMESHMESH_PATH"]
+    #    version="1.6.7",
+    #    repository="file://" + _espmeshmesh_path,
     #)
+    cg.add_library("ESPMeshMesh", "1.6.7")  # PlatformIO registry
     # <-- End of local copy of the espmeshmesh library sections
 
     cg.add_library(
