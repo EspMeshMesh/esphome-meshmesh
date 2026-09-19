@@ -20,6 +20,7 @@
 #endif
 
 #ifdef USE_MESH_MESH
+// MESHMESH: needed for lockdown + yield_and_feed_watchdog_() mesh pump
 #include "esphome/components/meshmesh/meshmesh.h"
 #include <espmeshmesh.h>
 #endif
@@ -27,6 +28,21 @@
 #include <cerrno>
 #include <cstdio>
 #include <sys/time.h>
+
+// =============================================================================
+// MESHMESH OVERRIDES (re-apply after copying upstream esphome/ota)
+// Search for "MESHMESH:" in this file. All deltas are behind USE_MESH_MESH
+// (or live inside yield_and_feed_watchdog_()).
+//
+// 1) Includes: meshmesh.h + espmeshmesh.h
+// 2) handle_data_ flash write: ESP8266 setLockdownMode around backend_->write
+// 3) Blocking I/O must pump the mesh (otherwise FEATURE_ACK never hits the air
+//    and the uploader times out on "receiving features response"):
+//      - handle_data_ main-read EWOULDBLOCK  (upstream: App.feed_wdt only)
+//      - readall_ loop                       (upstream: App.feed_wdt + delay(0))
+//      - writeall_ successful write          (upstream: App.feed_wdt only)
+// 4) yield_and_feed_watchdog_(): call meshmesh->loop() + longer ESP8266 delay
+// =============================================================================
 
 namespace esphome {
 
@@ -441,9 +457,14 @@ void ESPHomeOTAComponent::handle_data_() {
     if (read == -1) {
       const int err = errno;
       if (this->would_block_(err)) {
-        // read() already waited up to SO_RCVTIMEO for data; MeshMesh must
-        // still pump the mesh so TX/RX can progress under a blocked OTA loop.
+        // read() already waited up to SO_RCVTIMEO for data, just feed WDT
+#ifdef USE_MESH_MESH
+        // MESHMESH: replace App.feed_wdt() — OTA blocks App loop, so pump mesh
+        // or FEATURE_ACK / chunk ACKs never leave the radio.
         this->yield_and_feed_watchdog_();
+#else
+        App.feed_wdt();
+#endif
         continue;
       }
       ESP_LOGW(TAG, "Read err %d", err);
@@ -456,12 +477,14 @@ void ESPHomeOTAComponent::handle_data_() {
     last_data_ms = millis();
 #ifdef USE_MESH_MESH
 #ifdef USE_ESP8266
+    // MESHMESH: pause raw Wi‑Fi RX while writing flash (ESP8266 only)
     meshmesh::global_meshmesh_component->getNetwork()->setLockdownMode(true);
 #endif
 #endif
     error_code = this->backend_->write(buf, read);
 #ifdef USE_MESH_MESH
 #ifdef USE_ESP8266
+    // MESHMESH: end of flash-write lockdown
     meshmesh::global_meshmesh_component->getNetwork()->setLockdownMode(false);
 #endif
 #endif
@@ -486,6 +509,7 @@ void ESPHomeOTAComponent::handle_data_() {
       this->notify_state_(ota::OTA_IN_PROGRESS, percentage, 0);
 #endif
       // feed watchdog and give other tasks a chance to run
+      // MESHMESH: same call as upstream; MeshMesh body also pumps the mesh
       this->yield_and_feed_watchdog_();
     }
   }
@@ -568,8 +592,15 @@ bool ESPHomeOTAComponent::readall_(uint8_t *buf, size_t len) {
     } else {
       at += read;
     }
-    // MeshMesh: must run mesh loop while blocked in OTA (handshake TX flush).
+#ifdef USE_MESH_MESH
+    // MESHMESH: replace App.feed_wdt()+delay(0) — must pump mesh while blocked
+    // in handle_data_ (FEATURE_ACK / AUTH_OK flush before client times out).
     this->yield_and_feed_watchdog_();
+#else
+    // read() already waited via SO_RCVTIMEO, just yield without 1ms stall
+    App.feed_wdt();
+    delay(0);
+#endif
   }
 
   return true;
@@ -592,11 +623,18 @@ bool ESPHomeOTAComponent::writeall_(const uint8_t *buf, size_t len) {
         return false;
       }
       // EWOULDBLOCK: on raw TCP writes never block, delay(1) prevents spinning
+      // MESHMESH: same call as upstream; MeshMesh body also pumps the mesh
       this->yield_and_feed_watchdog_();
     } else {
       at += written;
-      // MeshMesh: pump mesh after every successful write so acks leave the radio.
+#ifdef USE_MESH_MESH
+      // MESHMESH: replace App.feed_wdt() — pump mesh after every successful write
+      // so handshake/feature/chunk acks actually leave the radio.
       this->yield_and_feed_watchdog_();
+#else
+      // write() may block up to SO_SNDTIMEO on BSD/lwip sockets, feed WDT
+      App.feed_wdt();
+#endif
     }
   }
   return true;
@@ -701,6 +739,9 @@ void ESPHomeOTAComponent::cleanup_connection_() {
 }
 
 void ESPHomeOTAComponent::yield_and_feed_watchdog_() {
+  // MESHMESH: upstream is only App.feed_wdt() + delay(1). We must also run
+  // meshmesh->loop() whenever OTA is in a blocking section (handle_data_,
+  // readall_, writeall_), because App's component loop is not running then.
 #ifdef USE_MESH_MESH
   meshmesh::global_meshmesh_component->loop();
 #endif
@@ -708,6 +749,7 @@ void ESPHomeOTAComponent::yield_and_feed_watchdog_() {
 
 #ifdef USE_MESH_MESH
 #ifdef USE_ESP8266
+  // MESHMESH: ESP8266 needs a longer yield so the radio stack can TX/RX
   delay(5);
 #else   // USE_ESP8266
   delay(1);

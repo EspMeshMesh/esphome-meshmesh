@@ -35,3 +35,15 @@ contained inside a #ifdef USE_MESH_MESH block.
 2. In the **socket** component all MeshMesh changes are handle by #ifdef USE_SOCKET_IMPL_MESHMESH_ESP32 
 or #ifdef USE_SOCKET_IMPL_MESHMESH_ESP8266 plus the specific meshmesh_socket_impl.* files.
 
+
+## esphome/ota MeshMesh markers
+
+When re-applying patches after copying upstream `esphome/components/esphome/ota/`:
+
+1. Search the override for `MESHMESH:` — every intentional delta is tagged.
+2. Keep upstream code in `#else` branches next to `#ifdef USE_MESH_MESH` so a
+   three-way merge against a new ESPHome tag stays obvious.
+3. Critical: blocking I/O (`readall_`, `writeall_` success path, data-read
+   `EWOULDBLOCK`) must call `yield_and_feed_watchdog_()` under MeshMesh, not
+   bare `App.feed_wdt()`. Omitting that causes `receiving features response: timed out`.
+4. `yield_and_feed_watchdog_()` itself must call `meshmesh->loop()` (+ ESP8266 `delay(5)`).
