@@ -18,6 +18,9 @@ void MeshmeshTest::setup() {
 void MeshmeshTest::loop() {
 
     switch(mState) {
+        case WAIT_START:
+            wait_start();
+            break;
         case BROADCAST1:
             broadcast1();
             break;
@@ -31,8 +34,9 @@ void MeshmeshTest::loop() {
             unicast2();
             break;
         case DONE:
-            if(millis() - mLastTime > 500) {
-                CHANGE_STATE_MSG("--------------------------------", BROADCAST1, 0);
+            if(millis() - mLastTime > 2500) {
+                ESP_LOGI(TAG, "Test for node %d ended", mIndex);
+                mLastTime = millis();
             }
             break;
     }
@@ -51,6 +55,46 @@ uint8_t MeshmeshTest::checksum(const uint8_t *buffer, uint16_t size) const {
     return sum;
 }
 
+int16_t MeshmeshTest::openTestSocket() {
+    closeTestResources();
+    mBuffer = new uint8_t[RX_BUFFER_SIZE];
+    mSocket = new espmeshmesh::MeshSocket(TEST_PORT);
+    return mSocket->open();
+}
+
+void MeshmeshTest::closeTestResources() {
+    delete[] mBuffer;
+    mBuffer = nullptr;
+    delete mSocket;
+    mSocket = nullptr;
+}
+
+int16_t MeshmeshTest::sendTestDatagram(const uint8_t *data, uint16_t size, const espmeshmesh::MeshAddress &target) {
+    return mSocket->sendDatagram(data, size, target, nullptr);
+}
+
+int16_t MeshmeshTest::recvTestDatagram() {
+    return mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, mRssi);
+}
+
+espmeshmesh::MeshAddress MeshmeshTest::broadcastTarget() const {
+    return espmeshmesh::MeshAddress(TEST_PORT, espmeshmesh::MeshAddress::broadCastAddress);
+}
+
+espmeshmesh::MeshAddress MeshmeshTest::unicastTarget() const {
+    return espmeshmesh::MeshAddress(espmeshmesh::MeshAddress::SRC_UNICAST, TEST_PORT, mFrom.address);
+}
+
+uint16_t MeshmeshTest::afterOpenSubState() const {
+    return IS_DIRECTOR() ? 1 : 2;
+}
+
+void MeshmeshTest::wait_start() {
+    const uint32_t delay = IS_DIRECTOR() ? 2000 : 500;
+    if(millis() - mLastTime > delay) {
+        CHANGE_STATE_MSG2("Starting test for node %d", BROADCAST1, 0, mIndex);
+    }
+}
 
 }  // namespace meshmesh
 }  // namespace esphome

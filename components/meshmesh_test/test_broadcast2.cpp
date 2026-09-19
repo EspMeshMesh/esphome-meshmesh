@@ -11,50 +11,43 @@
 namespace esphome {
 namespace meshmesh {
 
-const std::string MeshmeshTest::broadcast2title = "Broadcast send/recvDatagram small packet";
+const std::string MeshmeshTest::broadcast2title = "Broadcast sendDatagram/recvDatagram small packet";
 
 void MeshmeshTest::broadcast2(){
     switch(mSubState){
-        /**
-         * Test 1: Send and receive small packet
-         */
-        case 0: 
+        case 0:
             {
                 STATE_LOGI(broadcast2title.c_str());
-                mBuffer = new uint8_t[RX_BUFFER_SIZE];
-                mSocket = new espmeshmesh::MeshSocket(TEST_PORT, espmeshmesh::MeshSocket::broadCastAddress);
-                int16_t err = mSocket->open(espmeshmesh::MeshSocket::SOCK_DGRAM);
+                int16_t err = openTestSocket();
                 ERR_CHECK(err) {
-                    CHANGE_STATE_MSG("Socket opened", mState, mIndex == 1 ? 1 : 2);
+                    CHANGE_STATE_MSG("Socket opened", mState, afterOpenSubState());
                 }
             }
         break;
-        case 1: 
-            { // Director: Send small datagram
+        case 1:
+            {
                 STATE_LOGI("Sending small datagram");
-                int16_t err = mSocket->send((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE);
+                int16_t err = sendTestDatagram((const uint8_t *)HELLO_STRING, HELLO_STRING_SIZE, broadcastTarget());
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Small packet sent", mState, 3);
                 }
             }
         break;
-        case 2: 
-            { // Others:Wait for remote hello
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+        case 2:
+            {
+                int16_t res = recvTestDatagram();
                 ERR_CHECK(res) {
                     if(res) {
-                        CHANGE_STATE_MSG2("Received small datagram from %06X with rssi %d", mState, 4, mFrom, rssi);
+                        CHANGE_STATE_MSG2("Received small datagram from %06lX with rssi %d", mState, 4, mFrom.address, mRssi);
                     } else {
                         TIMEOUT_CHECK(5000);
-                    } 
-                } 
-            } 
+                    }
+                }
+            }
             break;
-        case 3: 
-            { // Director: Wait reply
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+        case 3:
+            {
+                int16_t res = recvTestDatagram();
                 ERR_CHECK(res) {
                     if(res > 0) {
                         std::string reply((const char *)mBuffer, res);
@@ -65,85 +58,72 @@ void MeshmeshTest::broadcast2(){
                             CHANGE_STATE(mState, 5);
                         }
                     } else TIMEOUT_CHECK(1000);
-                } 
+                }
             }
             break;
-        case 4: 
-            { // Others: Send reply
+        case 4:
+            {
                 STATE_LOGI("Sending hello reply");
-                int16_t err = mSocket->send((const uint8_t *)REPLY_STRING, REPLY_STRING_SIZE);
+                int16_t err = sendTestDatagram((const uint8_t *)REPLY_STRING, REPLY_STRING_SIZE, broadcastTarget());
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Hello reply sent", mState, 6);
                 }
-            } 
+            }
         break;
-        /**
-         * Test 2: Send and receive big packet
-         */
-        case 5: 
-            { // Director: Send big packet
+        case 5:
+            {
                 STATE_LOG2I("Sending big packet of size %d", SEND_BUFFER_SIZE);
-                int16_t err = mSocket->send((const uint8_t *)LORE_IPSUM, SEND_BUFFER_SIZE);
+                int16_t err = sendTestDatagram((const uint8_t *)LORE_IPSUM, SEND_BUFFER_SIZE, broadcastTarget());
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Big packet sent", mState, 7);
                 }
-            } 
+            }
         break;
-        case 6: 
-            { // Others: Wait for big packet
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+        case 6:
+            {
+                int16_t res = recvTestDatagram();
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        CHANGE_STATE_MSG2("Received big packet request", mState, 8, mFrom, rssi);
+                        CHANGE_STATE_MSG2("Received big packet request from %06lX with rssi %d", mState, 8, mFrom.address, mRssi);
                     } else {
                         TIMEOUT_CHECK(1000);
                     }
                 }
-            } 
+            }
         break;
-        case 7: 
-            { // Director: Wait big packet reply
-                int16_t rssi{0};
-                int16_t res = mSocket->recvDatagram(mBuffer, RX_BUFFER_SIZE, mFrom, rssi);
+        case 7:
+            {
+                int16_t res = recvTestDatagram();
                 ERR_CHECK(res) {
                     if(res > 0) {
-                        CHANGE_STATE_MSG2("Received big packet reply", mState, 99, mFrom, rssi);
+                        CHANGE_STATE_MSG2("Received big packet reply from %06lX with rssi %d", mState, 99, mFrom.address, mRssi);
                     } else {
                         TIMEOUT_CHECK(1000);
                     }
                 }
-            } 
+            }
         break;
         case 8:
-            { // Others: Send big packet reply
+            {
                 STATE_LOG2I("Sending big packet reply of size %d", SEND_BUFFER_SIZE);
-                int16_t err = mSocket->send((const uint8_t *)LORE_IPSUM, SEND_BUFFER_SIZE);
+                int16_t err = sendTestDatagram((const uint8_t *)LORE_IPSUM, SEND_BUFFER_SIZE, broadcastTarget());
                 ERR_CHECK(err) {
                     CHANGE_STATE_MSG("Big packet reply sent", mState, 99);
                 }
-            } 
+            }
         break;
         case 98:
-            // End with error
-            delete mBuffer;
-            mBuffer = nullptr;
-            delete mSocket;
-            mSocket = nullptr;
+            closeTestResources();
             CHANGE_STATE(DONE, 0);
-            STATE_LOGE2("End with error", "Big packet reply sent");
-        break;        
+            STATE_LOGE2("End with error %s", broadcast2title.c_str());
+        break;
         case 99:
-            // End with success
             STATE_LOG2I("%s done", broadcast2title.c_str());
-            delete[] mBuffer;
-            mBuffer = nullptr;
-            delete mSocket;
-            mSocket = nullptr;
+            closeTestResources();
             CHANGE_STATE(UNICAST1, 0);
         break;
     }
-   
+
 }
 
 }  // namespace meshmesh

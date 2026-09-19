@@ -5,6 +5,7 @@
 #define STATE_LOGE(M) ESP_LOGE(TAG, "State %d step %d: %s", mState, mSubState, M)
 #define STATE_LOGE2(M, ...) ESP_LOGE(TAG, "State %d step %d: " M, mState, mSubState, __VA_ARGS__)
 
+#define IS_DIRECTOR() (mIndex == 0)
 #define ERR_CHECK(X) if(X < 0) { STATE_LOGE("Response error"); CHANGE_STATE(mState, 98); } else
 #define CHANGE_STATE(X,Y) mState = X; mSubState = Y; mLastTime = millis()
 #define CHANGE_STATE_MSG(M,X,Y) STATE_LOGI(M); CHANGE_STATE(X,Y)

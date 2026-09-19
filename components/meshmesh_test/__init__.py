@@ -9,7 +9,7 @@ MeshmeshTestComponent = meshmesh_ns.class_("MeshmeshTest", cg.Component)
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(MeshmeshTestComponent),
-        cv.Required(CONF_INDEX): cv.positive_int,
+        cv.Required(CONF_INDEX): cv.int_range(min=0, max=255),
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
