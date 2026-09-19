@@ -146,18 +146,19 @@ async def to_code(config):
         "ESPMESHMESH_PATH", "/home/stefano/Sviluppo/Meshmesh/espmeshmesh"
     )
 
-    #cg.add_library(
-    #    name="ESPMeshMesh",
-    #    version="1.6.7",
-    #    repository="file://" + _espmeshmesh_path,
-    #)
+    # Local file:// breaks ESP-IDF component names under ESPHome 2026.7+
+    # (path becomes the component key). Use registry for builds; keep path helper
+    # for future workarounds.
+    _ = _espmeshmesh_path
+    # cg.add_library(
+    #     name="ESPMeshMesh",
+    #     version="1.6.7",
+    #     repository="file://" + _espmeshmesh_path,
+    # )
     cg.add_library("ESPMeshMesh", "1.6.7")  # PlatformIO registry
     # <-- End of local copy of the espmeshmesh library sections
 
-    cg.add_library(
-        name="Nanopb",
-        version="^0.4.91",
-        repository="nanopb/Nanopb"
-    )
+    # ESPHome 2026.7+ treats repository= as a git URL; use owner/name for registry.
+    cg.add_library("nanopb/Nanopb", "^0.4.91")
 
     await cg.register_component(var, config)
