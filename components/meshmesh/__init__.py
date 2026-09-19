@@ -90,6 +90,63 @@ CONFIG_SCHEMA = cv.Schema(
 ).extend(cv.COMPONENT_SCHEMA)
 
 
+
+# IDF components the ESPMeshMesh PIO library needs (raw 802.11 TX/RX).
+# ESPHome's PIO→IDF converter only puts library.json PIO deps in REQUIRES;
+# without these, coordinator builds (no wifi:) exclude esp_wifi and fail with
+# "esp_wifi.h: No such file" / missing REQUIRES.
+_ESPMESHMESH_IDF_REQUIRES = (
+    "esp_wifi",
+    "esp_phy",
+    "esp_event",
+    "esp_netif",
+    "esp_timer",
+    "nvs_flash",
+)
+
+
+def _ensure_espmeshmesh_idf_wifi_stack() -> None:
+    """Keep the Wi-Fi IDF stack in the build and in ESPMeshMesh REQUIRES."""
+    from esphome.components.esp32 import (
+        include_builtin_idf_component,
+        request_wifi,
+    )
+
+    # Soft-disable SoftAP-only opts stay under reconciler; we only need the radio.
+    request_wifi(ap=False)
+    for name in ("esp_wifi", "esp_phy", "wpa_supplicant", "esp_coex"):
+        include_builtin_idf_component(name)
+
+    try:
+        from esphome.espidf import component as idf_comp
+    except ImportError:
+        return
+    if getattr(idf_comp, "_meshmesh_idf_requires_patched", False):
+        return
+
+    _orig = idf_comp.generate_cmakelists_txt
+
+    def _generate_cmakelists_txt(component):
+        content = _orig(component)
+        path = str(getattr(component, "path", ""))
+        name = str(getattr(component, "name", ""))
+        if "ESPMeshMesh" not in name and "ESPMeshMesh" not in path and "espmeshmesh" not in path.lower():
+            return content
+        # First REQUIRES line only
+        lines = content.splitlines(keepends=True)
+        out = []
+        for line in lines:
+            if line.startswith("  REQUIRES ") and "esp_wifi" not in line:
+                # Insert after "REQUIRES "
+                rest = line[len("  REQUIRES ") :]
+                line = "  REQUIRES " + " ".join(_ESPMESHMESH_IDF_REQUIRES) + " " + rest
+            out.append(line)
+        return "".join(out)
+
+    idf_comp.generate_cmakelists_txt = _generate_cmakelists_txt
+    idf_comp._meshmesh_idf_requires_patched = True
+
+
 @coroutine_with_priority(CoroPriority.COMMUNICATION)
 async def to_code(config):
     # Request a log listener slot for API log streaming
@@ -114,6 +171,7 @@ async def to_code(config):
     if CORE.is_esp32:
         # Allow overriding ieee80211_raw_frame_sanity_check (see espmeshmesh wifi_raw_tx_bypass.c)
         cg.add_build_flag("-Wl,-zmuldefs")
+        _ensure_espmeshmesh_idf_wifi_stack()
 
     #cg.add_build_flag("-DUSE_POLITE_BROADCAST_PROTOCOL")
 
