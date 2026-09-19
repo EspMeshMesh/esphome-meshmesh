@@ -37,17 +37,17 @@ void MeshMeshDirectComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Setting up MeshMeshDirectComponent");
   #ifdef USE_SENSOR
   for (auto sensor : App.get_sensors()) {
-    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08X", sensor->get_name().c_str(), sensor->get_object_id_hash());
+    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08lX", sensor->get_name().c_str(), sensor->get_object_id_hash());
   }
 #endif
 #ifdef USE_BINARY_SENSOR
   for (auto sensor : App.get_binary_sensors()) {
-    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08X", sensor->get_name().c_str(), sensor->get_object_id_hash());
+    ESP_LOGCONFIG(TAG, "Found sensor %s with hash %08lX", sensor->get_name().c_str(), sensor->get_object_id_hash());
   }
 #endif
 #ifdef USE_SWITCH
   for (auto switch_ : App.get_switches()) {
-    ESP_LOGCONFIG(TAG, "Found switch %s with hash %08X", switch_->get_name().c_str(), switch_->get_object_id_hash());
+    ESP_LOGCONFIG(TAG, "Found switch %s with hash %08lX", switch_->get_name().c_str(), switch_->get_object_id_hash());
   }
 #endif
 }
