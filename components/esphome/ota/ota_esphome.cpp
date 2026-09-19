@@ -441,8 +441,9 @@ void ESPHomeOTAComponent::handle_data_() {
     if (read == -1) {
       const int err = errno;
       if (this->would_block_(err)) {
-        // read() already waited up to SO_RCVTIMEO for data, just feed WDT
-        App.feed_wdt();
+        // read() already waited up to SO_RCVTIMEO for data; MeshMesh must
+        // still pump the mesh so TX/RX can progress under a blocked OTA loop.
+        this->yield_and_feed_watchdog_();
         continue;
       }
       ESP_LOGW(TAG, "Read err %d", err);
@@ -567,9 +568,8 @@ bool ESPHomeOTAComponent::readall_(uint8_t *buf, size_t len) {
     } else {
       at += read;
     }
-    // read() already waited via SO_RCVTIMEO, just yield without 1ms stall
-    App.feed_wdt();
-    delay(0);
+    // MeshMesh: must run mesh loop while blocked in OTA (handshake TX flush).
+    this->yield_and_feed_watchdog_();
   }
 
   return true;
@@ -595,8 +595,8 @@ bool ESPHomeOTAComponent::writeall_(const uint8_t *buf, size_t len) {
       this->yield_and_feed_watchdog_();
     } else {
       at += written;
-      // write() may block up to SO_SNDTIMEO on BSD/lwip sockets, feed WDT
-      App.feed_wdt();
+      // MeshMesh: pump mesh after every successful write so acks leave the radio.
+      this->yield_and_feed_watchdog_();
     }
   }
   return true;
