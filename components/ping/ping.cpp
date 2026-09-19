@@ -32,10 +32,10 @@ void PingComponent::setup() {
 
 void PingComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "PingComponent");
-    ESP_LOGCONFIG(TAG, "Target Address: %06X", mTargetAddress.address);
+    ESP_LOGCONFIG(TAG, "Target Address: %06lX", mTargetAddress.address);
     ESP_LOGCONFIG(TAG, "Repeaters: %d", mTargetAddress.repeaters.size());
     for(uint32_t repeater : mTargetAddress.repeaters) {
-        ESP_LOGCONFIG(TAG, "Repeater: %06X", repeater);
+        ESP_LOGCONFIG(TAG, "Repeater: %06lX", repeater);
     }
     ESP_LOGCONFIG(TAG, "Log level: %d", ESPHOME_LOG_LEVEL);
 #ifdef USE_BINARY_SENSOR
