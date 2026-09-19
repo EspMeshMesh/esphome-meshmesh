@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - -I/home/stefano/Sviluppo/Meshmesh/espmeshmesh/src
+    - -I/home/stefano/Sviluppo/Meshmesh/esphome-meshtest/.esphome/build/test-node-1/src
+    - -I/home/stefano/Sviluppo/Meshmesh/esphome-meshmesh/components
