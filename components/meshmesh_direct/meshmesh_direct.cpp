@@ -62,7 +62,7 @@ void MeshMeshDirectComponent::broadcastSend(const uint8_t cmd, const uint8_t *da
   } else {
     ESP_LOGE(TAG, "Setup not completed, Socket not opened");
   }
-  delete buff;
+  delete[] buff;
 }
 
 void MeshMeshDirectComponent::broadcastSendCustom(const uint8_t *data, const uint16_t len) {
@@ -83,7 +83,7 @@ void MeshMeshDirectComponent::unicastSend(const uint8_t cmd, const uint8_t *data
   } else {
     ESP_LOGE(TAG, "Setup not completed, Socket not opened");
   }
-  delete buff;
+  delete[] buff;
 }
 
 void MeshMeshDirectComponent::unicastSendCustom(const uint8_t *data, const uint16_t len, const uint32_t addr) {
@@ -241,7 +241,7 @@ void MeshMeshDirectComponent::handleGetEntityHashFrame(const uint8_t *buf, uint1
       espmeshmesh::uint16toBuffer(rep + 2, hash);
       memcpy(rep + 4, info.c_str(), info.length());
       mSocket->sendDatagram(rep, 4 + info.length(), from, nullptr);
-      delete rep;
+      delete[] rep;
     } else {
       uint8_t rep[6];
       rep[0] = CMD_ENTITY_REQ;
@@ -336,6 +336,7 @@ void MeshMeshDirectComponent::handleGetEntityStateFrame(const uint8_t *buf, uint
       espmeshmesh::uint16toBuffer(rep + 3, hash);
       memcpy(rep + 5, value_str.data(), value_str.length());
       mSocket->sendDatagram(rep, rep_size, from, nullptr);
+      delete[] rep;
       return;
     } else {
       ESP_LOGE(TAG, "handleGetEntityStateFrame: Unknown entity with hash %04X", hash);
