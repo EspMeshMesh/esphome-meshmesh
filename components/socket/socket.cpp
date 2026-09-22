@@ -2,7 +2,6 @@
 #if defined(USE_SOCKET_IMPL_LWIP_TCP) || defined(USE_SOCKET_IMPL_LWIP_SOCKETS) || defined(USE_SOCKET_IMPL_BSD_SOCKETS) || defined(USE_SOCKET_IMPL_MESHMESH_ESP32) || defined(USE_SOCKET_IMPL_MESHMESH_ESP8266)
 #include <cerrno>
 #include <cstring>
-#include <cstdio>
 #include <string>
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"

@@ -192,7 +192,6 @@ using socklen_t = uint32_t;
 
 #endif  // USE_SOCKET_IMPL_BSD_SOCKETS
 
-// Start Meshmesh implementation -->
 #if defined(USE_SOCKET_IMPL_MESHMESH_ESP32)
 
 #include <cstdint>

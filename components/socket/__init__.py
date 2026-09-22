@@ -4,8 +4,10 @@ from enum import StrEnum
 import logging
 
 import esphome.codegen as cg
+from esphome.config_helpers import filter_source_files_from_defines
 import esphome.config_validation as cv
 from esphome.core import CORE
+from esphome.types import ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -169,7 +171,7 @@ CONFIG_SCHEMA = cv.Schema(
 )
 
 
-async def to_code(config):
+async def to_code(config: ConfigType) -> None:
     impl = config[CONF_IMPLEMENTATION]
     if impl == IMPLEMENTATION_LWIP_TCP:
         cg.add_define("USE_SOCKET_IMPL_LWIP_TCP")
@@ -177,6 +179,11 @@ async def to_code(config):
         cg.add_define("USE_SOCKET_IMPL_LWIP_SOCKETS")
     elif impl == IMPLEMENTATION_BSD_SOCKETS:
         cg.add_define("USE_SOCKET_IMPL_BSD_SOCKETS")
+        if CORE.using_zephyr:
+            from esphome.components.zephyr import zephyr_add_prj_conf
+
+            zephyr_add_prj_conf("NET_SOCKETS", True)
+            zephyr_add_prj_conf("POSIX_API", True)
     # --> Meshmesh implementation
     elif impl == IMPLEMENTATION_MESHMESH_ESP8266:
         cg.add_define("USE_SOCKET_IMPL_MESHMESH_ESP8266")
@@ -184,11 +191,6 @@ async def to_code(config):
     elif impl == IMPLEMENTATION_MESHMESH_ESP32:
         cg.add_define("USE_SOCKET_IMPL_MESHMESH_ESP32")
     # <-- End Meshmesh implementation
-        if CORE.using_zephyr:
-            from esphome.components.zephyr import zephyr_add_prj_conf
-
-            zephyr_add_prj_conf("NET_SOCKETS", True)
-            zephyr_add_prj_conf("POSIX_API", True)
     # ESP32 and LibreTiny both have LwIP >= 2.1.3 with lwip_socket_dbg_get_socket()
     # and FreeRTOS task notifications — enable fast select to bypass lwip_select().
     # Only when not using lwip_tcp, which does not provide select() support.
@@ -197,6 +199,10 @@ async def to_code(config):
     # <-- End Meshmesh implementation
         if (CORE.is_esp32 or CORE.is_libretiny) and impl != IMPLEMENTATION_LWIP_TCP:
             cg.add_build_flag("-DUSE_LWIP_FAST_SELECT")
+
+
+# Each implementation file is fully #ifdef'd on the define set in to_code
+# for the selected implementation.
 
 
 def FILTER_SOURCE_FILES() -> list[str]:
