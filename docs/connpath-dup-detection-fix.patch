@@ -1,0 +1,134 @@
+From de21fdc0e9f5578efd369690228da1e92991e31a Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 22 Sep 2026 04:29:39 +0000
+Subject: [PATCH] fix(recvdups): use bitmap for out-of-order duplicate
+ detection
+
+The previous duplicate detection used a simple seqno comparison that
+incorrectly treated late-arriving packets as duplicates. When a packet
+with seqno N arrives after seqno N+1 (due to radio retransmit queueing),
+the check '(stored - seqno) < 5' would mark it as a duplicate even
+though it was never actually received.
+
+This was especially problematic for 2-hop ConnectedPath transmissions
+where both radio hops could experience packet loss and retransmission,
+increasing the probability of out-of-order arrival.
+
+The fix introduces a 32-bit bitmap to track exactly which sequence
+numbers have been seen within a sliding window:
+- New seqnos ahead of max: shift bitmap, mark as seen, accept
+- Seqnos within window (32 back from max): check bitmap for exact match
+- Seqnos too old (>32 behind): treat as stale duplicate
+
+This correctly handles out-of-order delivery while still detecting
+actual duplicates (retransmitted packets that were already processed).
+
+Fixes: 2-hop OTA stall after first 8KB where legitimate data packets
+       were incorrectly dropped as duplicates.
+---
+ src/recvdups.cpp | 51 ++++++++++++++++++++++++++++++++++++++++++------
+ src/recvdups.h   |  3 ++-
+ 2 files changed, 47 insertions(+), 7 deletions(-)
+
+diff --git a/src/recvdups.cpp b/src/recvdups.cpp
+index e163c7e..2ac0b95 100644
+--- a/src/recvdups.cpp
++++ b/src/recvdups.cpp
+@@ -29,7 +29,9 @@ RecvDups::RecvDups() {
+ void RecvDups::printDuplicateTable(uint32_t now) {
+     LIB_LOGD(TAG, "Duplicate table size: %d", mFirstFreeAddressIndex);
+     for(int i=0; i<mFirstFreeAddressIndex; i++) {
+-        LIB_LOGD(TAG, "Duplicate table[%d]: address: %06lX:%d, seqno: %d, time: %d", i, mDuplicates[i].address, mDuplicates[i].handle, mDuplicates[i].seqno, now-mDuplicates[i].time);
++        LIB_LOGD(TAG, "Duplicate table[%d]: address: %06lX:%d, maxSeqno: %d, bitmap: 0x%08lX, time: %ld", 
++                 i, mDuplicates[i].address, mDuplicates[i].handle, mDuplicates[i].maxSeqno, 
++                 mDuplicates[i].seenBitmap, now-mDuplicates[i].time);
+     }
+ }
+ #endif
+@@ -73,6 +75,7 @@ bool RecvDups::checkDuplicateTable(uint32_t address, uint16_t handle, uint16_t s
+     }
+ 
+     if(foundrow < 0) {
++        // New (address, handle) pair - not a duplicate
+         if(mFirstFreeAddressIndex >= TABLE_TABLE_SIZE) {
+             int oldest = findOldestIndex(mDuplicates, mFirstFreeAddressIndex, now);
+             LIB_LOGW(TAG, "Duplicate table full, evicting %06lX:%04X for %06lX:%04X",
+@@ -84,19 +87,55 @@ bool RecvDups::checkDuplicateTable(uint32_t address, uint16_t handle, uint16_t s
+         mDuplicates[foundrow].time = now;
+         mDuplicates[foundrow].address = address;
+         mDuplicates[foundrow].handle = handle;
+-        mDuplicates[foundrow].seqno = seqno;
++        mDuplicates[foundrow].maxSeqno = seqno;
++        mDuplicates[foundrow].seenBitmap = 1;  // Bit 0 = current seqno seen
+         return false;
+     }
+ 
+     mDuplicates[foundrow].time = now;
+-    uint16_t stored = mDuplicates[foundrow].seqno;
+-    if(stored == seqno) {
++    uint16_t maxSeqno = mDuplicates[foundrow].maxSeqno;
++    uint32_t bitmap = mDuplicates[foundrow].seenBitmap;
++
++    // Calculate the distance from maxSeqno (handles uint16 wraparound)
++    int16_t delta = (int16_t)(seqno - maxSeqno);
++
++    if (delta == 0) {
++        // Exact match with maxSeqno - always a duplicate (bit 0 is always set)
++        return true;
++    }
++
++    if (delta > 0) {
++        // New seqno is ahead of maxSeqno - accept and shift bitmap
++        if (delta >= 32) {
++            // Large jump - reset bitmap (old entries are too stale)
++            bitmap = 1;
++        } else {
++            // Shift bitmap left and mark new seqno as seen
++            bitmap = (bitmap << delta) | 1;
++        }
++        mDuplicates[foundrow].maxSeqno = seqno;
++        mDuplicates[foundrow].seenBitmap = bitmap;
++        return false;
++    }
++
++    // delta < 0: seqno is behind maxSeqno (out-of-order arrival or late retransmit)
++    int offset = -delta;  // How many positions behind maxSeqno
++
++    if (offset >= 32) {
++        // seqno is too old (outside our tracking window) - treat as stale duplicate
++        // This prevents very old packets from being processed
+         return true;
+     }
+-    if ((uint16_t)(stored - seqno) < 5) {
++
++    // Check if this specific seqno was already seen
++    uint32_t mask = 1U << offset;
++    if (bitmap & mask) {
++        // Already seen this seqno - duplicate
+         return true;
+     }
+-    mDuplicates[foundrow].seqno = seqno;
++
++    // First time seeing this seqno (out-of-order but not duplicate) - accept it
++    mDuplicates[foundrow].seenBitmap = bitmap | mask;
+     return false;
+ }
+ 
+diff --git a/src/recvdups.h b/src/recvdups.h
+index be750ba..484c171 100644
+--- a/src/recvdups.h
++++ b/src/recvdups.h
+@@ -7,8 +7,9 @@ namespace espmeshmesh {
+ struct RecvDupPacket {
+     uint32_t address;
+     uint32_t time;
++    uint32_t seenBitmap;  // Bitmap tracking which of the last 32 seqnos have been seen
+     uint16_t handle;
+-    uint16_t seqno;
++    uint16_t maxSeqno;    // Highest sequence number seen (renamed from seqno for clarity)
+ };
+ 
+ #if defined(ESPMESH_RECV_DUP_TABLE_SIZE)
+-- 
+2.43.0
+
