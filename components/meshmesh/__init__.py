@@ -210,10 +210,10 @@ async def to_code(config):
     _ = _espmeshmesh_path
     # cg.add_library(
     #     name="ESPMeshMesh",
-    #     version="1.6.8",
+    #     version="1.6.9",
     #     repository="file://" + _espmeshmesh_path,
     # )
-    cg.add_library("ESPMeshMesh", "1.6.8")  # PlatformIO registry
+    cg.add_library("ESPMeshMesh", "1.6.9")  # PlatformIO registry
     # <-- End of local copy of the espmeshmesh library sections
 
     # ESPHome 2026.7+ treats repository= as a git URL; use owner/name for registry.
