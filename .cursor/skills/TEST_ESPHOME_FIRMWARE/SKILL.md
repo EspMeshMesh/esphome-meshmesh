@@ -24,7 +24,7 @@ between the serial port names and the config files:
 2. Esp32 Node1: /dev/ttyUSB1 --> test_node1.yaml
 3. Esp32 Node2: /dev/ttyUSB2 --> test_node2.yaml
 4. Esp32 Node3: /dev/ttyUSB3 --> test_node3.yaml
-5. Esp8266 Node4: /dev/ttyUSB3 --> test_node4_8266.yaml
+5. Esp8266 Node4: /dev/ttyUSB4 --> test_node4_8266.yaml
 
 - First compile the coordinator firmware and flash to the coordinator device.
 - Next compile de test node1 and flash to corresponding device.
